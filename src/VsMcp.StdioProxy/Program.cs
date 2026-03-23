@@ -74,7 +74,8 @@ namespace VsMcp.StdioProxy
             }
             else
             {
-                await Console.Error.WriteLineAsync("[VsMcp.StdioProxy] Visual Studio is not running. Operating in offline mode.");
+                var offlineReason = BuildOfflineStderrMessage();
+                await Console.Error.WriteLineAsync($"[VsMcp.StdioProxy] {offlineReason} Operating in offline mode.");
             }
 
             var cts = new CancellationTokenSource();
@@ -225,8 +226,11 @@ namespace VsMcp.StdioProxy
                         }
                         if (response == null)
                         {
+                            var reason = _baseUrl == null
+                                ? BuildOfflineStderrMessage()
+                                : "Relay failed.";
                             response = BuildJsonRpcError(id, McpConstants.MethodNotFound,
-                                $"Method not found: {method}. Visual Studio is not running.");
+                                $"Method not found: {method}. {reason}");
                         }
                         break;
                 }
@@ -429,28 +433,104 @@ namespace VsMcp.StdioProxy
             return ToolDefinitionCache.GetToolCount();
         }
 
-        private static string BuildToolsCallOfflineError(JToken id)
+        private static string BuildOfflineStderrMessage()
         {
-            var message = "ERROR: Visual Studio is not running.\n";
+            var instances = PortDiscovery.GetAllRunningInstances();
+            var vsProcessRunning = instances.Count > 0 || IsVisualStudioRunning(null);
 
-            var installations = VsInstallationDetector.Detect();
-            if (installations.Count > 0)
+            if (!vsProcessRunning)
+                return "Visual Studio is not running.";
+
+            if (_sln != null)
             {
-                message += "Detected VS installations:\n";
-                foreach (var inst in installations)
+                var expectedName = Path.GetFileName(_sln);
+                var runningSlns = instances.Count > 0
+                    ? string.Join(", ", instances.Select(i => string.IsNullOrEmpty(i.Sln) ? "(no solution)" : Path.GetFileName(i.Sln)))
+                    : "(vs-mcp extension not loaded)";
+                return $"Visual Studio is running, but no instance has '{expectedName}' open. Running: {runningSlns}.";
+            }
+
+            return "Visual Studio is running, but no matching instance was found (no .sln detected in working directory).";
+        }
+
+        private static string BuildOfflineMessage()
+        {
+            var instances = PortDiscovery.GetAllRunningInstances();
+            var vsProcessRunning = instances.Count > 0 || IsVisualStudioRunning(null);
+
+            if (!vsProcessRunning)
+            {
+                // Case 1: VS is not running at all
+                var message = "ERROR: Visual Studio is not running.\n";
+
+                var installations = VsInstallationDetector.Detect();
+                if (installations.Count > 0)
                 {
-                    message += $"  - {inst.DisplayName}: {inst.DevenvPath}\n";
+                    message += "Detected VS installations:\n";
+                    foreach (var inst in installations)
+                    {
+                        message += $"  - {inst.DisplayName}: {inst.DevenvPath}\n";
+                    }
+                }
+                else
+                {
+                    message += "No Visual Studio installations detected.\n";
+                }
+
+                message += "You MUST first ask the user which Visual Studio version and edition to use BEFORE starting it. NEVER assume or guess the VS version/edition — multiple versions may be installed.\n"
+                    + "NEVER guess solution (.sln) file names — use Glob (*.sln) to verify the exact file name before passing it to devenv.exe.\n"
+                    + "Use PowerShell Start-Process with the exact devenv.exe path (NOT cmd).\n"
+                    + "After starting VS, wait 30 seconds, then retry.";
+                return message;
+            }
+
+            // VS is running but no matching instance found
+            if (_sln != null)
+            {
+                // Case 2: We know which sln we expect, but no VS instance has it open
+                var expectedName = Path.GetFileName(_sln);
+                var message = $"ERROR: Visual Studio is running, but no instance has '{expectedName}' open.\n";
+                message += "Running VS instances:\n";
+                if (instances.Count > 0)
+                {
+                    foreach (var inst in instances)
+                    {
+                        var slnName = string.IsNullOrEmpty(inst.Sln) ? "(no solution)" : Path.GetFileName(inst.Sln);
+                        message += $"  - {slnName} (PID {inst.Pid})\n";
+                    }
+                }
+                else
+                {
+                    message += "  - (vs-mcp extension not loaded in any instance)\n";
+                }
+                message += $"Open '{expectedName}' in Visual Studio, or close the current solution and open it.\n"
+                    + "After opening the correct solution, retry the operation.";
+                return message;
+            }
+
+            // Case 3: _sln is null (no .sln found from CWD) but VS is running
+            var msg = "ERROR: Visual Studio is running, but no matching instance was found.\n";
+            msg += "No .sln file was detected in the current working directory hierarchy, so vs-mcp could not determine which VS instance to connect to.\n";
+            msg += "Running VS instances:\n";
+            if (instances.Count > 0)
+            {
+                foreach (var inst in instances)
+                {
+                    var slnName = string.IsNullOrEmpty(inst.Sln) ? "(no solution)" : Path.GetFileName(inst.Sln);
+                    msg += $"  - {slnName} (PID {inst.Pid})\n";
                 }
             }
             else
             {
-                message += "No Visual Studio installations detected.\n";
+                msg += "  - (vs-mcp extension not loaded in any instance)\n";
             }
+            msg += "Ensure the working directory contains or is within a directory with a .sln file, or use the --sln argument to specify the solution path.";
+            return msg;
+        }
 
-            message += "You MUST first ask the user which Visual Studio version and edition to use BEFORE starting it. NEVER assume or guess the VS version/edition — multiple versions may be installed.\n"
-                + "NEVER guess solution (.sln) file names — use Glob (*.sln) to verify the exact file name before passing it to devenv.exe.\n"
-                + "Use PowerShell Start-Process with the exact devenv.exe path (NOT cmd).\n"
-                + "After starting VS, wait 30 seconds, then retry.";
+        private static string BuildToolsCallOfflineError(JToken id)
+        {
+            var message = BuildOfflineMessage();
 
             var errorResult = new JObject
             {
