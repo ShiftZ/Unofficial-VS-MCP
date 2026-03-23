@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0] - 2026-03-24
+
+### Added
+- **C++ native test discovery and execution** — `test_discover` and `test_run` now support 4 C++ test frameworks:
+  - **Google Test** — discovers tests via `--gtest_list_tests`, runs with XML output
+  - **Boost.Test** — discovers tests via `--list_content`, runs with XML log output
+  - **MS CppUnitTest** — discovers via `vstest.console.exe` with source-parsing fallback
+  - **CTest/CMake** — discovers via `ctest -N` for CMake folder-mode projects
+- **CMake folder-mode support** — `test_discover` and `test_run` work when VS opens a CMake folder (no .sln required)
+- **Auto-detection of C++ test frameworks** from vcxproj dependencies and source file includes
+- **C++ test sample projects** — 4 sample projects for testing and reference (`tests/cpp/`)
+
+### Improved
+- **StdioProxy error messages** — clearer diagnostics when VS is running with a different solution than expected
+
 ## [0.3.1] - 2026-02-26
 
 ### Added

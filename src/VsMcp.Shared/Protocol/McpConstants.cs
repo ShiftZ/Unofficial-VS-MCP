@@ -35,7 +35,9 @@ namespace VsMcp.Shared.Protocol
                 + "SOLUTION FILES: Never guess .sln names; verify with Glob first. "
                 + "FALLBACK: If VS is busy, use 'dotnet build' as CLI fallback. "
                 + "OFFLINE MODE: If a tool returns 'Visual Studio is not running', the error lists detected installations. "
-                + "Ask user which to start, then use PowerShell Start-Process. Wait 30s, then retry.";
+                + "Ask user which to start, then use PowerShell Start-Process. Wait 30s, then retry. "
+                + "If the error says 'no instance has <sln> open', VS is running but with a different solution. "
+                + "Ask the user to open the correct solution in VS, then retry.";
         }
     }
 }

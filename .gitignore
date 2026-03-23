@@ -19,6 +19,12 @@ x86/
 [Bb]uild/
 bld/
 
+## vcpkg
+vcpkg_installed/
+
+## CMake
+out/
+
 ## NuGet
 packages/
 *.nupkg
