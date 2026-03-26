@@ -264,8 +264,8 @@ VS MCP Server exposes **106 tools** across the following categories:
 
 ## Requirements
 
-- **Visual Studio 2022** (17.0 or later) — Community, Professional, or Enterprise edition
-- **Windows** (amd64)
+- **Visual Studio 2019** (16.0 or later), **Visual Studio 2022**, or **Visual Studio 2026** — Community, Professional, or Enterprise edition
+- **Windows**
 - **.NET Framework 4.8**
 - **.NET 8.0 Runtime** (for the StdioProxy component)
 
