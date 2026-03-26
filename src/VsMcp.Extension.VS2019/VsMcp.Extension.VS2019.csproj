@@ -1,0 +1,99 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>VsMcp.Extension</RootNamespace>
+    <AssemblyName>VsMcp.Extension</AssemblyName>
+    <Version>0.4.0</Version>
+    <UseCodebase>true</UseCodebase>
+    <DeployExtension>false</DeployExtension>
+    <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
+    <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
+    <NoWarn>VSTHRD010;VSTHRD110</NoWarn>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <!-- Explicit VSSDK properties that need early evaluation -->
+    <GeneratePkgDefFile>true</GeneratePkgDefFile>
+    <CreateVsixContainer>true</CreateVsixContainer>
+    <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
+    <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
+    <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
+    <TargetVsixContainerName>VsMcp.Extension.VS2019.vsix</TargetVsixContainerName>
+    <!-- Fix IntermediateOutputPath for VSSDK targets in SDK-style project -->
+    <IntermediateOutputPath Condition="'$(IntermediateOutputPath)' == ''">obj\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
+    <CreatePkgDefAssemblyToProcess Condition="'$(CreatePkgDefAssemblyToProcess)' == ''">bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll</CreatePkgDefAssemblyToProcess>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="16.10.31321.278" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="16.11.71" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\VsMcp.Shared\VsMcp.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="UIAutomationClient" />
+    <Reference Include="UIAutomationTypes" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
+  <!-- Linked source files from VsMcp.Extension -->
+  <ItemGroup>
+    <Compile Include="..\VsMcp.Extension\VsMcpPackage.cs" Link="VsMcpPackage.cs" />
+    <Compile Include="..\VsMcp.Extension\McpServer\McpHttpServer.cs" Link="McpServer\McpHttpServer.cs" />
+    <Compile Include="..\VsMcp.Extension\McpServer\McpRequestRouter.cs" Link="McpServer\McpRequestRouter.cs" />
+    <Compile Include="..\VsMcp.Extension\McpServer\McpToolRegistry.cs" Link="McpServer\McpToolRegistry.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\VsServiceAccessor.cs" Link="Services\VsServiceAccessor.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\IBrowserConnection.cs" Link="Services\IBrowserConnection.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\CdpConnection.cs" Link="Services\CdpConnection.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\FirefoxRdpConnection.cs" Link="Services\FirefoxRdpConnection.cs" />
+    <Compile Include="..\VsMcp.Extension\Tools\*.cs" Link="Tools\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="source.extension.vsixmanifest">
+      <SubType>Designer</SubType>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\VsMcp.Extension\Resources\icon.png">
+      <Link>Resources\icon.png</Link>
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\LICENSE.txt">
+      <Link>LICENSE.txt</Link>
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!-- Import VSSDK targets for VSIX packaging -->
+  <Import Project="$(NuGetPackageRoot)microsoft.vssdk.buildtools\16.11.71\tools\vssdk\Microsoft.VsSDK.targets" />
+
+  <!-- Publish StdioProxy and include in VSIX -->
+  <PropertyGroup>
+    <StdioProxyPublishDir>$(ProjectDir)obj\StdioProxy\</StdioProxyPublishDir>
+    <CreateVsixContainerDependsOn>PublishStdioProxy;$(CreateVsixContainerDependsOn)</CreateVsixContainerDependsOn>
+  </PropertyGroup>
+
+  <Target Name="PublishStdioProxy">
+    <Exec Command="dotnet publish &quot;$(ProjectDir)..\VsMcp.StdioProxy\VsMcp.StdioProxy.csproj&quot; -c $(Configuration) -o &quot;$(StdioProxyPublishDir).&quot; --no-self-contained -v quiet" />
+    <ItemGroup>
+      <VSIXSourceItem Include="$(StdioProxyPublishDir)*.exe;$(StdioProxyPublishDir)*.dll;$(StdioProxyPublishDir)*.json">
+        <VSIXSubPath>StdioProxy</VSIXSubPath>
+      </VSIXSourceItem>
+    </ItemGroup>
+  </Target>
+
+  <!-- Hook VSIX packaging into the build process -->
+  <Target Name="CreateVsixAfterBuild" AfterTargets="Build"
+          DependsOnTargets="DetokenizeVsixManifestFile;GeneratePkgDef;CopyPkgDef;CreateVsixContainer" />
+
+</Project>
