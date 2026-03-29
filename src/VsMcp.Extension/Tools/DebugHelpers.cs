@@ -8,6 +8,11 @@ namespace VsMcp.Extension.Tools
     /// </summary>
     internal static class DebugHelpers
     {
+        // Localized forms of "Unknown" returned by VS for unrecognized frame languages
+        private static readonly System.Collections.Generic.HashSet<string> UnknownLanguageNames =
+            new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
+            { "Unknown", "不明", "未知", "알 수 없음", "Unbekannt", "Inconnu", "Desconocido", "Sconosciuto", "Desconhecido", "Неизвестно", "Bilinmiyor", "Neznámý", "Nieznany" };
+
         /// <summary>
         /// Determines if a stack frame is likely a managed code frame.
         /// Uses heuristics: known managed languages, or namespace-qualified function names.
@@ -17,7 +22,7 @@ namespace VsMcp.Extension.Tools
             try
             {
                 var lang = frame.Language;
-                if (!string.IsNullOrEmpty(lang) && lang != "不明" && lang != "Unknown")
+                if (!string.IsNullOrEmpty(lang) && !UnknownLanguageNames.Contains(lang))
                     return true;
 
                 var funcName = frame.FunctionName;

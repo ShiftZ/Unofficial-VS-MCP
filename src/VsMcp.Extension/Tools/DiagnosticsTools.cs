@@ -37,7 +37,7 @@ namespace VsMcp.Extension.Tools
                 OutputWindowPane debugPane = null;
 
                 // Find the Debug output pane (handles localized names)
-                var debugPaneNames = new[] { "Debug", "デバッグ" };
+                var debugPaneNames = new[] { "Debug", "デバッグ", "调试", "偵錯", "디버그", "Debuggen", "Déboguer", "Depurar", "Отладка", "Hata Ayıklama", "Ladění", "Debugowanie" };
                 foreach (OutputWindowPane pane in outputWindow.OutputWindowPanes)
                 {
                     try

@@ -13,12 +13,12 @@ namespace VsMcp.Extension.Tools
 {
     public static class OutputTools
     {
-        // Map common English pane names to known localized names
+        // Map common English pane names to known localized names (ja, zh-Hans, zh-Hant, ko, de, fr, es, it, pt-BR, ru, tr, cs, pl)
         private static readonly Dictionary<string, string[]> PaneAliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
         {
-            { "Build", new[] { "ビルド" } },
-            { "Debug", new[] { "デバッグ" } },
-            { "General", new[] { "全般" } },
+            { "Build", new[] { "ビルド", "生成", "組建", "빌드", "Erstellen", "Générer", "Compilar", "Compilazione", "Compilar", "Сборка", "Derleme", "Sestavení", "Kompilacja" } },
+            { "Debug", new[] { "デバッグ", "调试", "偵錯", "디버그", "Debuggen", "Déboguer", "Depurar", "Debug", "Depurar", "Отладка", "Hata Ayıklama", "Ladění", "Debugowanie" } },
+            { "General", new[] { "全般", "常规", "一般", "일반", "Allgemein", "Général", "General", "Generale", "Geral", "Общие", "Genel", "Obecné", "Ogólne" } },
         };
 
         public static void Register(McpToolRegistry registry, VsServiceAccessor accessor)
@@ -36,7 +36,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "output_read",
-                    "Read the content of a Visual Studio Output window pane. Supports English and Japanese pane names (e.g. 'Build' or 'ビルド'). Call without pane parameter to list available panes. Returns the last 'tail' lines by default (200). Use tail=0 to read all content.",
+                    "Read the content of a Visual Studio Output window pane. Supports localized pane names (e.g. 'Build', 'Debug'). Call without pane parameter to list available panes. Returns the last 'tail' lines by default (200). Use tail=0 to read all content.",
                     SchemaBuilder.Create()
                         .AddString("pane", "The name of the output pane to read (e.g. 'Build', 'Debug')")
                         .AddInteger("tail", "Number of lines to return from the end (default: 200, 0 = all)")
