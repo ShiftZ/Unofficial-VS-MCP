@@ -47,6 +47,15 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "output_clear",
+                    "Clear the content of a Visual Studio Output window pane",
+                    SchemaBuilder.Create()
+                        .AddString("pane", "The name of the output pane to clear (e.g. 'Build', 'Debug')", required: true)
+                        .Build()),
+                args => OutputClearAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
                     "error_list_get",
                     "Get all items from the Visual Studio Error List window (errors, warnings, and messages)",
                     SchemaBuilder.Create()
@@ -116,6 +125,26 @@ namespace VsMcp.Extension.Tools
                 pane.Activate();
 
                 return McpToolResult.Success($"Written to output pane '{paneName}'");
+            });
+        }
+
+        private static async Task<McpToolResult> OutputClearAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var paneName = args.Value<string>("pane");
+            if (string.IsNullOrEmpty(paneName))
+                return McpToolResult.Error("Parameter 'pane' is required");
+
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                var pane = FindPane(dte.ToolWindows.OutputWindow, paneName);
+                if (pane == null)
+                    return McpToolResult.Error($"Output pane '{paneName}' not found");
+
+                pane.Clear();
+                return McpToolResult.Success($"Output pane '{paneName}' cleared");
             });
         }
 
