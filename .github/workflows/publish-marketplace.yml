@@ -29,20 +29,6 @@ jobs:
       - name: Build VS2019 Extension (Release)
         run: msbuild src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj /p:Configuration=Release /p:DeployExtension=false /verbosity:minimal
 
-      - name: Publish VS2022/2026 Extension to Marketplace
-        uses: cezarypiatek/VsixPublisherAction@1.1
-        with:
-          extensionFile: src\VsMcp.Extension\VsMcp.Extension.vsix
-          publishManifestFile: src\VsMcp.Extension\publishManifest.json
-          personalAccessToken: ${{ secrets.VS_MARKETPLACE_PAT }}
-
-      - name: Publish VS2019 Extension to Marketplace
-        uses: cezarypiatek/VsixPublisherAction@1.1
-        with:
-          extensionFile: src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.vsix
-          publishManifestFile: src\VsMcp.Extension.VS2019\publishManifest.json
-          personalAccessToken: ${{ secrets.VS_MARKETPLACE_PAT }}
-
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -52,3 +38,21 @@ jobs:
             "src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.vsix#VS MCP Server (VS 2019)" `
             --title "${{ github.ref_name }}" `
             --generate-notes
+
+      - name: Publish VS2022/2026 Extension to Marketplace
+        if: secrets.VS_MARKETPLACE_PAT != ''
+        continue-on-error: true
+        uses: cezarypiatek/VsixPublisherAction@1.1
+        with:
+          extension-file: src\VsMcp.Extension\VsMcp.Extension.vsix
+          publish-manifest-file: src\VsMcp.Extension\publishManifest.json
+          personal-access-code: ${{ secrets.VS_MARKETPLACE_PAT }}
+
+      - name: Publish VS2019 Extension to Marketplace
+        if: secrets.VS_MARKETPLACE_PAT != ''
+        continue-on-error: true
+        uses: cezarypiatek/VsixPublisherAction@1.1
+        with:
+          extension-file: src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.vsix
+          publish-manifest-file: src\VsMcp.Extension.VS2019\publishManifest.json
+          personal-access-code: ${{ secrets.VS_MARKETPLACE_PAT }}
