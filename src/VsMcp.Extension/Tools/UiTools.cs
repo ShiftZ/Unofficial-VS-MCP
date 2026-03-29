@@ -35,6 +35,14 @@ namespace VsMcp.Extension.Tools
         [DllImport("user32.dll")]
         private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = (IntPtr)(-4);
+
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
         {
@@ -256,7 +264,7 @@ namespace VsMcp.Extension.Tools
             if (hwnd == IntPtr.Zero)
                 return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
 
-            return await Task.Run(() =>
+            return await Task.Run(() => WithDpiAwareness(() =>
             {
                 if (!GetWindowRect(hwnd, out RECT rect))
                     return McpToolResult.Error("Failed to get window rectangle");
@@ -278,7 +286,7 @@ namespace VsMcp.Extension.Tools
                     var (base64, mimeType) = BitmapToBase64WithMime(bitmap);
                     return McpToolResult.Image(base64, mimeType);
                 }
-            });
+            }));
         }
 
         private static async Task<McpToolResult> UiCaptureRegionAsync(VsServiceAccessor accessor, JObject args)
@@ -295,7 +303,7 @@ namespace VsMcp.Extension.Tools
             if (hwnd == IntPtr.Zero)
                 return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
 
-            return await Task.Run(() =>
+            return await Task.Run(() => WithDpiAwareness(() =>
             {
                 if (!GetWindowRect(hwnd, out RECT rect))
                     return McpToolResult.Error("Failed to get window rectangle");
@@ -339,7 +347,7 @@ namespace VsMcp.Extension.Tools
                         return McpToolResult.Image(base64, mimeType);
                     }
                 }
-            });
+            }));
         }
 
         private static Bitmap ResizeIfNeeded(Bitmap bitmap)
@@ -986,50 +994,94 @@ namespace VsMcp.Extension.Tools
 
         #region Helpers
 
+        /// <summary>
+        /// Executes an action with Per-Monitor DPI Awareness V2 context,
+        /// ensuring all Win32 coordinate APIs use physical pixel coordinates.
+        /// </summary>
+        private static T WithDpiAwareness<T>(Func<T> action)
+        {
+            var prev = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                if (prev != IntPtr.Zero)
+                    SetThreadDpiAwarenessContext(prev);
+            }
+        }
+
+        private static void WithDpiAwareness(Action action)
+        {
+            var prev = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            try
+            {
+                action();
+            }
+            finally
+            {
+                if (prev != IntPtr.Zero)
+                    SetThreadDpiAwarenessContext(prev);
+            }
+        }
+
         private static string ValidateCoordinatesInWindow(IntPtr hwnd, int x, int y)
         {
             if (hwnd == IntPtr.Zero)
                 return null; // No window to validate against
 
-            if (!GetWindowRect(hwnd, out RECT rect))
-                return null; // Can't get rect, skip validation
+            return WithDpiAwareness(() =>
+            {
+                if (!GetWindowRect(hwnd, out RECT rect))
+                    return null; // Can't get rect, skip validation
 
-            if (x >= rect.Left && x <= rect.Right && y >= rect.Top && y <= rect.Bottom)
-                return null; // Inside window bounds
+                if (x >= rect.Left && x <= rect.Right && y >= rect.Top && y <= rect.Bottom)
+                    return (string)null; // Inside window bounds
 
-            return $"Coordinates ({x}, {y}) are outside the debugged application's window bounds ({rect.Left},{rect.Top} - {rect.Right},{rect.Bottom}). Click was not performed to prevent interacting with unintended applications.";
+                return $"Coordinates ({x}, {y}) are outside the debugged application's window bounds ({rect.Left},{rect.Top} - {rect.Right},{rect.Bottom}). Click was not performed to prevent interacting with unintended applications.";
+            });
         }
 
         private static void PerformClick(int x, int y)
         {
-            SetCursorPos(x, y);
-            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            WithDpiAwareness(() =>
+            {
+                SetCursorPos(x, y);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            });
         }
 
         private static void PerformRightClick(int x, int y)
         {
-            SetCursorPos(x, y);
-            mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
-            mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+            WithDpiAwareness(() =>
+            {
+                SetCursorPos(x, y);
+                mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+            });
         }
 
         private static void PerformDrag(int startX, int startY, int endX, int endY, int steps, int delayMs)
         {
-            SetCursorPos(startX, startY);
-            System.Threading.Thread.Sleep(50);
-            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-            System.Threading.Thread.Sleep(100);
-
-            for (int i = 1; i <= steps; i++)
+            WithDpiAwareness(() =>
             {
-                int x = startX + (endX - startX) * i / steps;
-                int y = startY + (endY - startY) * i / steps;
-                SetCursorPos(x, y);
-                System.Threading.Thread.Sleep(delayMs);
-            }
+                SetCursorPos(startX, startY);
+                System.Threading.Thread.Sleep(50);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                System.Threading.Thread.Sleep(100);
 
-            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                for (int i = 1; i <= steps; i++)
+                {
+                    int x = startX + (endX - startX) * i / steps;
+                    int y = startY + (endY - startY) * i / steps;
+                    SetCursorPos(x, y);
+                    System.Threading.Thread.Sleep(delayMs);
+                }
+
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            });
         }
 
         private static async Task<(int x, int y)?> ResolveElementCoordinatesAsync(
