@@ -35,6 +35,14 @@ namespace VsMcp.Extension.Tools
         [DllImport("user32.dll")]
         private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetThreadDpiAwarenessContext(IntPtr dpiContext);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hwnd);
+
+        private static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = (IntPtr)(-4);
+
         [StructLayout(LayoutKind.Sequential)]
         private struct RECT
         {
@@ -54,6 +62,9 @@ namespace VsMcp.Extension.Tools
 
         private const int UiaTimeoutSeconds = 30;
         private const int MaxImageDimension = 1920;
+        // Base64 overhead is ~1.37x, so 14MB base64 ≈ 10.2MB raw.
+        // Claude Code limit is 20MB; keep well under it.
+        private const int MaxBase64Length = 14 * 1024 * 1024;
 
         private static Task<T> RunOnBackgroundSTAAsync<T>(Func<T> func)
         {
@@ -253,7 +264,7 @@ namespace VsMcp.Extension.Tools
             if (hwnd == IntPtr.Zero)
                 return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
 
-            return await Task.Run(() =>
+            return await Task.Run(() => WithDpiAwareness(() =>
             {
                 if (!GetWindowRect(hwnd, out RECT rect))
                     return McpToolResult.Error("Failed to get window rectangle");
@@ -272,10 +283,10 @@ namespace VsMcp.Extension.Tools
                         graphics.ReleaseHdc(hdc);
                     }
 
-                    string base64 = BitmapToBase64(bitmap);
-                    return McpToolResult.Image(base64);
+                    var (base64, mimeType) = BitmapToBase64WithMime(bitmap);
+                    return McpToolResult.Image(base64, mimeType);
                 }
-            });
+            }));
         }
 
         private static async Task<McpToolResult> UiCaptureRegionAsync(VsServiceAccessor accessor, JObject args)
@@ -292,7 +303,7 @@ namespace VsMcp.Extension.Tools
             if (hwnd == IntPtr.Zero)
                 return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
 
-            return await Task.Run(() =>
+            return await Task.Run(() => WithDpiAwareness(() =>
             {
                 if (!GetWindowRect(hwnd, out RECT rect))
                     return McpToolResult.Error("Failed to get window rectangle");
@@ -332,11 +343,11 @@ namespace VsMcp.Extension.Tools
                                 GraphicsUnit.Pixel);
                         }
 
-                        string base64 = BitmapToBase64(regionBitmap);
-                        return McpToolResult.Image(base64);
+                        var (base64, mimeType) = BitmapToBase64WithMime(regionBitmap);
+                        return McpToolResult.Image(base64, mimeType);
                     }
                 }
-            });
+            }));
         }
 
         private static Bitmap ResizeIfNeeded(Bitmap bitmap)
@@ -359,17 +370,92 @@ namespace VsMcp.Extension.Tools
             return resized;
         }
 
-        private static string BitmapToBase64(Bitmap bitmap)
+        private static (string base64, string mimeType) BitmapToBase64WithMime(Bitmap bitmap)
         {
             using (var resized = ResizeIfNeeded(bitmap))
             {
                 var target = resized ?? bitmap;
-                using (var ms = new MemoryStream())
+
+                // Try PNG first
+                string base64 = EncodeToBase64(target, ImageFormat.Png);
+                if (base64.Length <= MaxBase64Length)
+                    return (base64, "image/png");
+
+                // PNG too large — fall back to JPEG (quality 85)
+                base64 = EncodeJpeg(target, 85);
+                if (base64.Length <= MaxBase64Length)
+                    return (base64, "image/jpeg");
+
+                // Still too large — progressively shrink until it fits
+                var current = target;
+                Bitmap shrunk = null;
+                try
                 {
-                    target.Save(ms, ImageFormat.Png);
-                    return Convert.ToBase64String(ms.ToArray());
+                    foreach (int maxDim in new[] { 1440, 1280, 1024, 800 })
+                    {
+                        shrunk?.Dispose();
+                        shrunk = ShrinkTo(current, maxDim);
+                        base64 = EncodeJpeg(shrunk, 80);
+                        if (base64.Length <= MaxBase64Length)
+                            return (base64, "image/jpeg");
+                    }
+                    // Last resort — return whatever we have
+                    return (base64, "image/jpeg");
+                }
+                finally
+                {
+                    shrunk?.Dispose();
                 }
             }
+        }
+
+        private static string EncodeToBase64(Bitmap bmp, ImageFormat format)
+        {
+            using (var ms = new MemoryStream())
+            {
+                bmp.Save(ms, format);
+                return Convert.ToBase64String(ms.ToArray());
+            }
+        }
+
+        private static string EncodeJpeg(Bitmap bmp, int quality)
+        {
+            var encoder = GetEncoder(ImageFormat.Jpeg);
+            var encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, (long)quality);
+            using (var ms = new MemoryStream())
+            {
+                bmp.Save(ms, encoder, encoderParams);
+                return Convert.ToBase64String(ms.ToArray());
+            }
+        }
+
+        private static ImageCodecInfo GetEncoder(ImageFormat format)
+        {
+            foreach (var codec in ImageCodecInfo.GetImageDecoders())
+            {
+                if (codec.FormatID == format.Guid)
+                    return codec;
+            }
+            return null;
+        }
+
+        private static Bitmap ShrinkTo(Bitmap bitmap, int maxDim)
+        {
+            int w = bitmap.Width;
+            int h = bitmap.Height;
+            double scale = Math.Min((double)maxDim / w, (double)maxDim / h);
+            if (scale >= 1.0) scale = 1.0;
+            int newW = (int)(w * scale);
+            int newH = (int)(h * scale);
+
+            var result = new Bitmap(newW, newH, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(result))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(bitmap, 0, 0, newW, newH);
+            }
+            return result;
         }
 
         #endregion
@@ -908,50 +994,94 @@ namespace VsMcp.Extension.Tools
 
         #region Helpers
 
+        /// <summary>
+        /// Executes an action with Per-Monitor DPI Awareness V2 context,
+        /// ensuring all Win32 coordinate APIs use physical pixel coordinates.
+        /// </summary>
+        private static T WithDpiAwareness<T>(Func<T> action)
+        {
+            var prev = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                if (prev != IntPtr.Zero)
+                    SetThreadDpiAwarenessContext(prev);
+            }
+        }
+
+        private static void WithDpiAwareness(Action action)
+        {
+            var prev = SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+            try
+            {
+                action();
+            }
+            finally
+            {
+                if (prev != IntPtr.Zero)
+                    SetThreadDpiAwarenessContext(prev);
+            }
+        }
+
         private static string ValidateCoordinatesInWindow(IntPtr hwnd, int x, int y)
         {
             if (hwnd == IntPtr.Zero)
                 return null; // No window to validate against
 
-            if (!GetWindowRect(hwnd, out RECT rect))
-                return null; // Can't get rect, skip validation
+            return WithDpiAwareness(() =>
+            {
+                if (!GetWindowRect(hwnd, out RECT rect))
+                    return null; // Can't get rect, skip validation
 
-            if (x >= rect.Left && x <= rect.Right && y >= rect.Top && y <= rect.Bottom)
-                return null; // Inside window bounds
+                if (x >= rect.Left && x <= rect.Right && y >= rect.Top && y <= rect.Bottom)
+                    return (string)null; // Inside window bounds
 
-            return $"Coordinates ({x}, {y}) are outside the debugged application's window bounds ({rect.Left},{rect.Top} - {rect.Right},{rect.Bottom}). Click was not performed to prevent interacting with unintended applications.";
+                return $"Coordinates ({x}, {y}) are outside the debugged application's window bounds ({rect.Left},{rect.Top} - {rect.Right},{rect.Bottom}). Click was not performed to prevent interacting with unintended applications.";
+            });
         }
 
         private static void PerformClick(int x, int y)
         {
-            SetCursorPos(x, y);
-            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            WithDpiAwareness(() =>
+            {
+                SetCursorPos(x, y);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            });
         }
 
         private static void PerformRightClick(int x, int y)
         {
-            SetCursorPos(x, y);
-            mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
-            mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+            WithDpiAwareness(() =>
+            {
+                SetCursorPos(x, y);
+                mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
+            });
         }
 
         private static void PerformDrag(int startX, int startY, int endX, int endY, int steps, int delayMs)
         {
-            SetCursorPos(startX, startY);
-            System.Threading.Thread.Sleep(50);
-            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
-            System.Threading.Thread.Sleep(100);
-
-            for (int i = 1; i <= steps; i++)
+            WithDpiAwareness(() =>
             {
-                int x = startX + (endX - startX) * i / steps;
-                int y = startY + (endY - startY) * i / steps;
-                SetCursorPos(x, y);
-                System.Threading.Thread.Sleep(delayMs);
-            }
+                SetCursorPos(startX, startY);
+                System.Threading.Thread.Sleep(50);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                System.Threading.Thread.Sleep(100);
 
-            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+                for (int i = 1; i <= steps; i++)
+                {
+                    int x = startX + (endX - startX) * i / steps;
+                    int y = startY + (endY - startY) * i / steps;
+                    SetCursorPos(x, y);
+                    System.Threading.Thread.Sleep(delayMs);
+                }
+
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            });
         }
 
         private static async Task<(int x, int y)?> ResolveElementCoordinatesAsync(

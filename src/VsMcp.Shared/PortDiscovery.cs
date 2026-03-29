@@ -147,6 +147,7 @@ namespace VsMcp.Shared
             {
                 // Search all port files for matching solution
                 var files = Directory.GetFiles(folder, $"{McpConstants.PortFilePrefix}*{McpConstants.PortFileSuffix}");
+                int? fallbackPort = null;
                 foreach (var file in files.OrderByDescending(f => File.GetLastWriteTime(f)))
                 {
                     var fileName = Path.GetFileNameWithoutExtension(file);
@@ -161,10 +162,21 @@ namespace VsMcp.Shared
                         }
 
                         var data = ReadPortFile(file);
-                        if (data != null && SlnPathMatches(data.Sln, normalizedSlnPath))
-                            return data.Port;
+                        if (data != null)
+                        {
+                            if (SlnPathMatches(data.Sln, normalizedSlnPath))
+                                return data.Port;
+
+                            // Extension may not have written sln path yet; remember as fallback
+                            if (string.IsNullOrEmpty(data.Sln) && !fallbackPort.HasValue)
+                                fallbackPort = data.Port;
+                        }
                     }
                 }
+                // If only one VS instance is running and its sln field is empty (not yet written),
+                // connect to it as a fallback rather than going offline
+                if (fallbackPort.HasValue)
+                    return fallbackPort.Value;
                 return null;
             }
 

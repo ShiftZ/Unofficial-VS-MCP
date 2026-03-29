@@ -10,25 +10,25 @@
     <DeployExtension>false</DeployExtension>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
-    <StartAction>Program</StartAction>
-    <StartProgram>$(DevEnvDir)devenv.exe</StartProgram>
-    <StartArguments>/rootsuffix Exp</StartArguments>
     <NoWarn>VSTHRD010;VSTHRD110</NoWarn>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <!-- Explicit VSSDK properties that need early evaluation -->
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
     <CreateVsixContainer>true</CreateVsixContainer>
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <IncludeDebugSymbolsInVSIXContainer>false</IncludeDebugSymbolsInVSIXContainer>
     <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
-    <TargetVsixContainerName>VsMcp.Extension.vsix</TargetVsixContainerName>
+    <TargetVsixContainerName>VsMcp.Extension.VS2019.vsix</TargetVsixContainerName>
     <!-- Fix IntermediateOutputPath for VSSDK targets in SDK-style project -->
     <IntermediateOutputPath Condition="'$(IntermediateOutputPath)' == ''">obj\$(Configuration)\$(TargetFramework)\</IntermediateOutputPath>
     <CreatePkgDefAssemblyToProcess Condition="'$(CreatePkgDefAssemblyToProcess)' == ''">bin\$(Configuration)\$(TargetFramework)\$(AssemblyName).dll</CreatePkgDefAssemblyToProcess>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.12.40392" ExcludeAssets="runtime" />
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.13.2126" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="16.10.31321.278" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="16.11.71" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.Validation" Version="16.10.57" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,9 +38,23 @@
   <ItemGroup>
     <Reference Include="UIAutomationClient" />
     <Reference Include="UIAutomationTypes" />
+    <Reference Include="WindowsBase" />
     <Reference Include="System.Drawing" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml.Linq" />
+  </ItemGroup>
+
+  <!-- Linked source files from VsMcp.Extension -->
+  <ItemGroup>
+    <Compile Include="..\VsMcp.Extension\VsMcpPackage.cs" Link="VsMcpPackage.cs" />
+    <Compile Include="..\VsMcp.Extension\McpServer\McpHttpServer.cs" Link="McpServer\McpHttpServer.cs" />
+    <Compile Include="..\VsMcp.Extension\McpServer\McpRequestRouter.cs" Link="McpServer\McpRequestRouter.cs" />
+    <Compile Include="..\VsMcp.Extension\McpServer\McpToolRegistry.cs" Link="McpServer\McpToolRegistry.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\VsServiceAccessor.cs" Link="Services\VsServiceAccessor.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\IBrowserConnection.cs" Link="Services\IBrowserConnection.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\CdpConnection.cs" Link="Services\CdpConnection.cs" />
+    <Compile Include="..\VsMcp.Extension\Services\FirefoxRdpConnection.cs" Link="Services\FirefoxRdpConnection.cs" />
+    <Compile Include="..\VsMcp.Extension\Tools\*.cs" Link="Tools\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -50,7 +64,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Resources\icon.png">
+    <Content Include="..\VsMcp.Extension\Resources\icon.png">
+      <Link>Resources\icon.png</Link>
       <IncludeInVSIX>true</IncludeInVSIX>
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Content>
@@ -62,7 +77,7 @@
   </ItemGroup>
 
   <!-- Import VSSDK targets for VSIX packaging -->
-  <Import Project="$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.13.2126\tools\vssdk\Microsoft.VsSDK.targets" />
+  <Import Project="$(NuGetPackageRoot)microsoft.vssdk.buildtools\16.11.71\tools\vssdk\Microsoft.VsSDK.targets" />
 
   <!-- Publish StdioProxy and include in VSIX -->
   <PropertyGroup>

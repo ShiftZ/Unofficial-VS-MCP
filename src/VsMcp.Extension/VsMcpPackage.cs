@@ -58,6 +58,11 @@ namespace VsMcp.Extension
             await SubscribeSolutionEventsAsync();
 
             Debug.WriteLine($"[VsMcp] Package initialized, MCP server on port {_httpServer.Port}");
+
+            // Show status bar message
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+            var statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
+            statusBar?.SetText("vs-mcp 利用可能");
         }
 
         private async Task SubscribeSolutionEventsAsync()
