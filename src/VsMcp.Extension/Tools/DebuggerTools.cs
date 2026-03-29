@@ -24,6 +24,13 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "debug_start_without_debugging",
+                    "Start the startup project without the debugger attached (equivalent to Ctrl+F5)",
+                    SchemaBuilder.Empty()),
+                args => DebugStartWithoutDebuggingAsync(accessor));
+
+            registry.Register(
+                new McpToolDefinition(
                     "debug_stop",
                     "Stop debugging the current session",
                     SchemaBuilder.Empty()),
@@ -116,6 +123,18 @@ namespace VsMcp.Extension.Tools
 
                 dte.Solution.SolutionBuild.Debug();
                 return McpToolResult.Success("Debugging started");
+            });
+        }
+
+        private static async Task<McpToolResult> DebugStartWithoutDebuggingAsync(VsServiceAccessor accessor)
+        {
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                dte.ExecuteCommand("Debug.StartWithoutDebugging");
+                return McpToolResult.Success("Started without debugging");
             });
         }
 
