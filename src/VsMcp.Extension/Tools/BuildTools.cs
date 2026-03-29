@@ -116,20 +116,8 @@ namespace VsMcp.Extension.Tools
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
                 var config = sb.ActiveConfiguration?.Name ?? "Debug";
 
-                // Find the project unique name
-                string uniqueName = null;
-                foreach (Project project in dte.Solution.Projects)
-                {
-                    try
-                    {
-                        if (string.Equals(project.Name, name, StringComparison.OrdinalIgnoreCase))
-                        {
-                            uniqueName = project.UniqueName;
-                            break;
-                        }
-                    }
-                    catch { }
-                }
+                // Find the project unique name (recursing into solution folders)
+                string uniqueName = FindProjectUniqueName(dte.Solution.Projects, name);
 
                 if (uniqueName == null)
                     return McpToolResult.Error($"Project '{name}' not found");
@@ -219,6 +207,51 @@ namespace VsMcp.Extension.Tools
                     errors
                 });
             });
+        }
+
+        private static string FindProjectUniqueName(Projects projects, string name)
+        {
+            foreach (Project project in projects)
+            {
+                try
+                {
+                    var result = FindProjectUniqueNameRecursive(project, name);
+                    if (result != null)
+                        return result;
+                }
+                catch { }
+            }
+            return null;
+        }
+
+        private static string FindProjectUniqueNameRecursive(Project project, string name)
+        {
+            // Solution folder — recurse into sub-projects
+            if (project.Kind == "{66A26720-8FB5-11D2-AA7E-00C04F688DDE}")
+            {
+                if (project.ProjectItems != null)
+                {
+                    foreach (ProjectItem item in project.ProjectItems)
+                    {
+                        try
+                        {
+                            if (item.SubProject != null)
+                            {
+                                var result = FindProjectUniqueNameRecursive(item.SubProject, name);
+                                if (result != null)
+                                    return result;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                return null;
+            }
+
+            if (string.Equals(project.Name, name, StringComparison.OrdinalIgnoreCase))
+                return project.UniqueName;
+
+            return null;
         }
 
         private static string GetSeverity(ErrorItem item)
