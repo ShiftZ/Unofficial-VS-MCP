@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using EnvDTE;
 using EnvDTE80;
@@ -36,10 +37,11 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "output_read",
-                    "Read the content of a Visual Studio Output window pane. Supports localized pane names (e.g. 'Build', 'Debug'). Call without pane parameter to list available panes. Returns the last 'tail' lines by default (200). Use tail=0 to read all content.",
+                    "Read the content of a Visual Studio Output window pane. Supports localized pane names (e.g. 'Build', 'Debug'). Call without pane parameter to list available panes. Returns the last 'tail' lines by default (200). Use tail=0 to read all content. Use 'pattern' to filter lines by regex.",
                     SchemaBuilder.Create()
                         .AddString("pane", "The name of the output pane to read (e.g. 'Build', 'Debug')")
                         .AddInteger("tail", "Number of lines to return from the end (default: 200, 0 = all)")
+                        .AddString("pattern", "Regex pattern to filter lines (only matching lines are returned)")
                         .Build()),
                 args => OutputReadAsync(accessor, args));
 
@@ -122,6 +124,21 @@ namespace VsMcp.Extension.Tools
             var paneName = args.Value<string>("pane");
             var tailParam = args["tail"];
             int tailLines = tailParam != null ? (int)tailParam : 200;
+            var pattern = args.Value<string>("pattern");
+
+            // Validate regex early
+            Regex regex = null;
+            if (!string.IsNullOrEmpty(pattern))
+            {
+                try
+                {
+                    regex = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
+                }
+                catch (ArgumentException ex)
+                {
+                    return McpToolResult.Error($"Invalid regex pattern: {ex.Message}");
+                }
+            }
 
             return await accessor.RunOnUIThreadAsync(() =>
             {
@@ -156,26 +173,50 @@ namespace VsMcp.Extension.Tools
                 var textDocument = pane.TextDocument;
                 var editPoint = textDocument.StartPoint.CreateEditPoint();
                 var content = editPoint.GetText(textDocument.EndPoint);
+                var totalLines = textDocument.EndPoint.Line;
+
+                var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+
+                // Apply pattern filter
+                int matchedLines = 0;
+                if (regex != null)
+                {
+                    var filtered = new List<string>();
+                    foreach (var line in lines)
+                    {
+                        if (regex.IsMatch(line))
+                            filtered.Add(line);
+                    }
+                    matchedLines = filtered.Count;
+                    lines = filtered.ToArray();
+                }
 
                 // Apply tail limit
-                var totalLines = textDocument.EndPoint.Line;
                 bool truncated = false;
-                if (tailLines > 0 && totalLines > tailLines)
+                if (tailLines > 0 && lines.Length > tailLines)
                 {
-                    var lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-                    var startIndex = lines.Length > tailLines ? lines.Length - tailLines : 0;
-                    content = string.Join("\n", lines, startIndex, lines.Length - startIndex);
+                    var startIndex = lines.Length - tailLines;
+                    var tail = new string[tailLines];
+                    Array.Copy(lines, startIndex, tail, 0, tailLines);
+                    lines = tail;
                     truncated = true;
                 }
 
-                return McpToolResult.Success(new
+                content = string.Join("\n", lines);
+
+                var result = new Dictionary<string, object>
                 {
-                    pane = paneName,
-                    totalLines,
-                    truncated,
-                    tailLines = truncated ? tailLines : totalLines,
-                    content
-                });
+                    { "pane", paneName },
+                    { "totalLines", totalLines },
+                    { "truncated", truncated },
+                    { "returnedLines", lines.Length },
+                    { "content", content }
+                };
+
+                if (regex != null)
+                    result["matchedLines"] = matchedLines;
+
+                return McpToolResult.Success(result);
             });
         }
 
