@@ -54,6 +54,9 @@ namespace VsMcp.Extension.Tools
 
         private const int UiaTimeoutSeconds = 30;
         private const int MaxImageDimension = 1920;
+        // Base64 overhead is ~1.37x, so 14MB base64 ≈ 10.2MB raw.
+        // Claude Code limit is 20MB; keep well under it.
+        private const int MaxBase64Length = 14 * 1024 * 1024;
 
         private static Task<T> RunOnBackgroundSTAAsync<T>(Func<T> func)
         {
@@ -272,8 +275,8 @@ namespace VsMcp.Extension.Tools
                         graphics.ReleaseHdc(hdc);
                     }
 
-                    string base64 = BitmapToBase64(bitmap);
-                    return McpToolResult.Image(base64);
+                    var (base64, mimeType) = BitmapToBase64WithMime(bitmap);
+                    return McpToolResult.Image(base64, mimeType);
                 }
             });
         }
@@ -332,8 +335,8 @@ namespace VsMcp.Extension.Tools
                                 GraphicsUnit.Pixel);
                         }
 
-                        string base64 = BitmapToBase64(regionBitmap);
-                        return McpToolResult.Image(base64);
+                        var (base64, mimeType) = BitmapToBase64WithMime(regionBitmap);
+                        return McpToolResult.Image(base64, mimeType);
                     }
                 }
             });
@@ -359,17 +362,92 @@ namespace VsMcp.Extension.Tools
             return resized;
         }
 
-        private static string BitmapToBase64(Bitmap bitmap)
+        private static (string base64, string mimeType) BitmapToBase64WithMime(Bitmap bitmap)
         {
             using (var resized = ResizeIfNeeded(bitmap))
             {
                 var target = resized ?? bitmap;
-                using (var ms = new MemoryStream())
+
+                // Try PNG first
+                string base64 = EncodeToBase64(target, ImageFormat.Png);
+                if (base64.Length <= MaxBase64Length)
+                    return (base64, "image/png");
+
+                // PNG too large — fall back to JPEG (quality 85)
+                base64 = EncodeJpeg(target, 85);
+                if (base64.Length <= MaxBase64Length)
+                    return (base64, "image/jpeg");
+
+                // Still too large — progressively shrink until it fits
+                var current = target;
+                Bitmap shrunk = null;
+                try
                 {
-                    target.Save(ms, ImageFormat.Png);
-                    return Convert.ToBase64String(ms.ToArray());
+                    foreach (int maxDim in new[] { 1440, 1280, 1024, 800 })
+                    {
+                        shrunk?.Dispose();
+                        shrunk = ShrinkTo(current, maxDim);
+                        base64 = EncodeJpeg(shrunk, 80);
+                        if (base64.Length <= MaxBase64Length)
+                            return (base64, "image/jpeg");
+                    }
+                    // Last resort — return whatever we have
+                    return (base64, "image/jpeg");
+                }
+                finally
+                {
+                    shrunk?.Dispose();
                 }
             }
+        }
+
+        private static string EncodeToBase64(Bitmap bmp, ImageFormat format)
+        {
+            using (var ms = new MemoryStream())
+            {
+                bmp.Save(ms, format);
+                return Convert.ToBase64String(ms.ToArray());
+            }
+        }
+
+        private static string EncodeJpeg(Bitmap bmp, int quality)
+        {
+            var encoder = GetEncoder(ImageFormat.Jpeg);
+            var encoderParams = new EncoderParameters(1);
+            encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, (long)quality);
+            using (var ms = new MemoryStream())
+            {
+                bmp.Save(ms, encoder, encoderParams);
+                return Convert.ToBase64String(ms.ToArray());
+            }
+        }
+
+        private static ImageCodecInfo GetEncoder(ImageFormat format)
+        {
+            foreach (var codec in ImageCodecInfo.GetImageDecoders())
+            {
+                if (codec.FormatID == format.Guid)
+                    return codec;
+            }
+            return null;
+        }
+
+        private static Bitmap ShrinkTo(Bitmap bitmap, int maxDim)
+        {
+            int w = bitmap.Width;
+            int h = bitmap.Height;
+            double scale = Math.Min((double)maxDim / w, (double)maxDim / h);
+            if (scale >= 1.0) scale = 1.0;
+            int newW = (int)(w * scale);
+            int newH = (int)(h * scale);
+
+            var result = new Bitmap(newW, newH, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(result))
+            {
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.DrawImage(bitmap, 0, 0, newW, newH);
+            }
+            return result;
         }
 
         #endregion
