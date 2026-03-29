@@ -29,6 +29,7 @@ namespace VsMcp.Shared
             { "clean", "Build" },
             { "rebuild", "Build" },
             { "get_build_errors", "Build" },
+            { "build_configuration", "Build" },
             // Editor
             { "file_open", "Editor" },
             { "file_close", "Editor" },
@@ -39,6 +40,7 @@ namespace VsMcp.Shared
             { "find_in_files", "Editor" },
             // Debugger
             { "debug_start", "Debugger" },
+            { "debug_start_without_debugging", "Debugger" },
             { "debug_stop", "Debugger" },
             { "debug_restart", "Debugger" },
             { "debug_attach", "Debugger" },
@@ -90,6 +92,7 @@ namespace VsMcp.Shared
             { "output_write", "Output" },
             { "output_read", "Output" },
             { "error_list_get", "Output" },
+            { "output_clear", "Output" },
             // UI Automation
             { "ui_capture_window", "UI" },
             { "ui_capture_region", "UI" },

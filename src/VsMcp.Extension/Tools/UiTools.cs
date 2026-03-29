@@ -264,29 +264,15 @@ namespace VsMcp.Extension.Tools
             if (hwnd == IntPtr.Zero)
                 return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
 
-            return await Task.Run(() => WithDpiAwareness(() =>
+            var bitmap = await CaptureWindowBitmapAsync(hwnd);
+            if (bitmap == null)
+                return McpToolResult.Error("Failed to capture window");
+
+            using (bitmap)
             {
-                if (!GetWindowRect(hwnd, out RECT rect))
-                    return McpToolResult.Error("Failed to get window rectangle");
-
-                int width = rect.Right - rect.Left;
-                int height = rect.Bottom - rect.Top;
-                if (width <= 0 || height <= 0)
-                    return McpToolResult.Error("Window has invalid dimensions");
-
-                using (var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb))
-                {
-                    using (var graphics = Graphics.FromImage(bitmap))
-                    {
-                        IntPtr hdc = graphics.GetHdc();
-                        PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT);
-                        graphics.ReleaseHdc(hdc);
-                    }
-
-                    var (base64, mimeType) = BitmapToBase64WithMime(bitmap);
-                    return McpToolResult.Image(base64, mimeType);
-                }
-            }));
+                var (base64, mimeType) = BitmapToBase64WithMime(bitmap);
+                return McpToolResult.Image(base64, mimeType);
+            }
         }
 
         private static async Task<McpToolResult> UiCaptureRegionAsync(VsServiceAccessor accessor, JObject args)
@@ -303,51 +289,90 @@ namespace VsMcp.Extension.Tools
             if (hwnd == IntPtr.Zero)
                 return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
 
-            return await Task.Run(() => WithDpiAwareness(() =>
+            var fullBitmap = await CaptureWindowBitmapAsync(hwnd);
+            if (fullBitmap == null)
+                return McpToolResult.Error("Failed to capture window");
+
+            using (fullBitmap)
+            {
+                // Clamp region to captured bitmap bounds
+                int clampedX = Math.Max(0, Math.Min(x, fullBitmap.Width - 1));
+                int clampedY = Math.Max(0, Math.Min(y, fullBitmap.Height - 1));
+                int clampedW = Math.Min(width, fullBitmap.Width - clampedX);
+                int clampedH = Math.Min(height, fullBitmap.Height - clampedY);
+
+                if (clampedW <= 0 || clampedH <= 0)
+                    return McpToolResult.Error("Specified region is outside the window bounds");
+
+                using (var regionBitmap = new Bitmap(clampedW, clampedH, PixelFormat.Format32bppArgb))
+                {
+                    using (var g = Graphics.FromImage(regionBitmap))
+                    {
+                        g.DrawImage(fullBitmap,
+                            new Rectangle(0, 0, clampedW, clampedH),
+                            new Rectangle(clampedX, clampedY, clampedW, clampedH),
+                            GraphicsUnit.Pixel);
+                    }
+
+                    var (base64, mimeType) = BitmapToBase64WithMime(regionBitmap);
+                    return McpToolResult.Image(base64, mimeType);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Captures the full window bitmap. Tries WGC first (works even when
+        /// the window is covered), falls back to PrintWindow.
+        /// </summary>
+        private static async Task<Bitmap> CaptureWindowBitmapAsync(IntPtr hwnd)
+        {
+            // Try Windows.Graphics.Capture first
+            if (WgcCaptureHelper.IsSupported)
+            {
+                try
+                {
+                    var bitmap = await WgcCaptureHelper.CaptureWindowAsync(hwnd);
+                    if (bitmap != null)
+                        return bitmap;
+                }
+                catch
+                {
+                    // Fall through to PrintWindow
+                }
+            }
+
+            // Fallback: PrintWindow (may fail when the window is occluded or
+            // the app's UI thread is frozen, e.g. during a debug break).
+            // Use a timeout to avoid hanging indefinitely.
+            var printTask = Task.Run(() => CaptureWithPrintWindow(hwnd));
+            if (await Task.WhenAny(printTask, Task.Delay(3000)) == printTask)
+                return await printTask;
+
+            // PrintWindow timed out (likely debug break). Return null.
+            return null;
+        }
+
+        private static Bitmap CaptureWithPrintWindow(IntPtr hwnd)
+        {
+            return WithDpiAwareness(() =>
             {
                 if (!GetWindowRect(hwnd, out RECT rect))
-                    return McpToolResult.Error("Failed to get window rectangle");
+                    return (Bitmap)null;
 
-                int winWidth = rect.Right - rect.Left;
-                int winHeight = rect.Bottom - rect.Top;
-                if (winWidth <= 0 || winHeight <= 0)
-                    return McpToolResult.Error("Window has invalid dimensions");
+                int width = rect.Right - rect.Left;
+                int height = rect.Bottom - rect.Top;
+                if (width <= 0 || height <= 0)
+                    return (Bitmap)null;
 
-                // Capture the full window first
-                using (var fullBitmap = new Bitmap(winWidth, winHeight, PixelFormat.Format32bppArgb))
+                var bitmap = new Bitmap(width, height, PixelFormat.Format32bppArgb);
+                using (var graphics = Graphics.FromImage(bitmap))
                 {
-                    using (var graphics = Graphics.FromImage(fullBitmap))
-                    {
-                        IntPtr hdc = graphics.GetHdc();
-                        PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT);
-                        graphics.ReleaseHdc(hdc);
-                    }
-
-                    // Clamp region to window bounds
-                    int clampedX = Math.Max(0, Math.Min(x, winWidth - 1));
-                    int clampedY = Math.Max(0, Math.Min(y, winHeight - 1));
-                    int clampedW = Math.Min(width, winWidth - clampedX);
-                    int clampedH = Math.Min(height, winHeight - clampedY);
-
-                    if (clampedW <= 0 || clampedH <= 0)
-                        return McpToolResult.Error("Specified region is outside the window bounds");
-
-                    // Crop the region
-                    using (var regionBitmap = new Bitmap(clampedW, clampedH, PixelFormat.Format32bppArgb))
-                    {
-                        using (var g = Graphics.FromImage(regionBitmap))
-                        {
-                            g.DrawImage(fullBitmap,
-                                new Rectangle(0, 0, clampedW, clampedH),
-                                new Rectangle(clampedX, clampedY, clampedW, clampedH),
-                                GraphicsUnit.Pixel);
-                        }
-
-                        var (base64, mimeType) = BitmapToBase64WithMime(regionBitmap);
-                        return McpToolResult.Image(base64, mimeType);
-                    }
+                    IntPtr hdc = graphics.GetHdc();
+                    PrintWindow(hwnd, hdc, PW_RENDERFULLCONTENT);
+                    graphics.ReleaseHdc(hdc);
                 }
-            }));
+                return bitmap;
+            });
         }
 
         private static Bitmap ResizeIfNeeded(Bitmap bitmap)

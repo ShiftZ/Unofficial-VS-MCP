@@ -5,7 +5,7 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>VsMcp.Extension</RootNamespace>
     <AssemblyName>VsMcp.Extension</AssemblyName>
-    <Version>0.4.2</Version>
+    <Version>0.5.0</Version>
     <UseCodebase>true</UseCodebase>
     <DeployExtension>false</DeployExtension>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
@@ -29,6 +29,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.12.40392" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.13.2126" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.22621.755" />
   </ItemGroup>
 
   <ItemGroup>
