@@ -53,12 +53,39 @@ namespace VsMcp.Extension.Tools
                 args => GetBuildErrorsAsync(accessor));
         }
 
+        private static void ShowOutputWindow(DTE2 dte)
+        {
+            try
+            {
+                var outputWindow = dte.ToolWindows.OutputWindow;
+                outputWindow.Parent.Activate();
+
+                // Activate the "Build" pane
+                foreach (OutputWindowPane pane in outputWindow.OutputWindowPanes)
+                {
+                    try
+                    {
+                        // Match localized "Build" / "ビルド" pane by GUID
+                        if (string.Equals(pane.Guid, "{1BD8A850-02D1-11D1-BEE7-00A0C913D1F8}", StringComparison.OrdinalIgnoreCase))
+                        {
+                            pane.Activate();
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+        }
+
         private static async Task<McpToolResult> BuildSolutionAsync(VsServiceAccessor accessor)
         {
             return await accessor.RunOnUIThreadAsync(() =>
             {
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
+
+                ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
                 sb.Build(true);
@@ -83,6 +110,8 @@ namespace VsMcp.Extension.Tools
             {
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
+
+                ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
                 var config = sb.ActiveConfiguration?.Name ?? "Debug";
@@ -124,6 +153,8 @@ namespace VsMcp.Extension.Tools
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
 
+                ShowOutputWindow(dte);
+
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
                 sb.Clean(true);
 
@@ -137,6 +168,8 @@ namespace VsMcp.Extension.Tools
             {
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
+
+                ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
                 sb.Build(true);
