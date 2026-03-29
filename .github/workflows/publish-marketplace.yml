@@ -15,17 +15,16 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
-      - name: Setup NuGet
-        uses: nuget/setup-nuget@v2
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
 
-      - name: Restore NuGet packages
-        run: nuget restore src\VsMcp.Extension\VsMcp.Extension.csproj -SolutionDirectory src
+      - name: Restore packages
+        run: dotnet restore Unoffcial-VS-MCP.sln
 
       - name: Build VS2022/2026 Extension (Release)
         run: msbuild src\VsMcp.Extension\VsMcp.Extension.csproj /p:Configuration=Release /p:DeployExtension=false /verbosity:minimal
-
-      - name: Restore NuGet packages (VS2019)
-        run: nuget restore src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj -SolutionDirectory src
 
       - name: Build VS2019 Extension (Release)
         run: msbuild src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj /p:Configuration=Release /p:DeployExtension=false /verbosity:minimal
