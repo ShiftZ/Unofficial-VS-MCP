@@ -47,6 +47,16 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "build_configuration",
+                    "Get or set the active solution build configuration and platform. Call without parameters to list all available configurations.",
+                    SchemaBuilder.Create()
+                        .AddString("configuration", "Configuration name to set (e.g. 'Debug', 'Release')")
+                        .AddString("platform", "Platform name to set (e.g. 'Any CPU', 'x64', 'x86')")
+                        .Build()),
+                args => BuildConfigurationAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
                     "get_build_errors",
                     "Get the list of build errors and warnings from the Visual Studio Error List. Call this after build_solution to check results.",
                     SchemaBuilder.Empty()),
@@ -185,6 +195,76 @@ namespace VsMcp.Extension.Tools
                     failedProjects = sb.LastBuildInfo,
                     message = succeeded ? "Rebuild succeeded" : $"Rebuild failed with {sb.LastBuildInfo} project(s) having errors"
                 });
+            });
+        }
+
+        private static async Task<McpToolResult> BuildConfigurationAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var configuration = args.Value<string>("configuration");
+            var platform = args.Value<string>("platform");
+
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
+
+                // List available configurations
+                var configs = new List<string>();
+                foreach (SolutionConfiguration2 sc in sb.SolutionConfigurations)
+                {
+                    try { configs.Add($"{sc.Name}|{sc.PlatformName}"); }
+                    catch { }
+                }
+
+                var activeConfig = sb.ActiveConfiguration;
+                string activeName = null;
+                string activePlatform = null;
+                try
+                {
+                    var ac = (SolutionConfiguration2)activeConfig;
+                    activeName = ac.Name;
+                    activePlatform = ac.PlatformName;
+                }
+                catch { }
+
+                // If no parameters, just return current state
+                if (string.IsNullOrEmpty(configuration) && string.IsNullOrEmpty(platform))
+                {
+                    return McpToolResult.Success(new
+                    {
+                        activeConfiguration = activeName,
+                        activePlatform,
+                        available = configs
+                    });
+                }
+
+                // Set the requested configuration
+                var targetConfig = configuration ?? activeName;
+                var targetPlatform = platform ?? activePlatform;
+
+                foreach (SolutionConfiguration2 sc in sb.SolutionConfigurations)
+                {
+                    try
+                    {
+                        if (string.Equals(sc.Name, targetConfig, StringComparison.OrdinalIgnoreCase) &&
+                            string.Equals(sc.PlatformName, targetPlatform, StringComparison.OrdinalIgnoreCase))
+                        {
+                            sc.Activate();
+                            return McpToolResult.Success(new
+                            {
+                                message = $"Switched to {sc.Name}|{sc.PlatformName}",
+                                activeConfiguration = sc.Name,
+                                activePlatform = sc.PlatformName,
+                                available = configs
+                            });
+                        }
+                    }
+                    catch { }
+                }
+
+                return McpToolResult.Error($"Configuration '{targetConfig}|{targetPlatform}' not found. Available: {string.Join(", ", configs)}");
             });
         }
 
