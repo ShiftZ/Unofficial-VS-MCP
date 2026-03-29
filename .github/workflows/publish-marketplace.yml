@@ -40,7 +40,7 @@ jobs:
             --generate-notes
 
       - name: Publish VS2022/2026 Extension to Marketplace
-        if: secrets.VS_MARKETPLACE_PAT != ''
+        if: ${{ secrets.VS_MARKETPLACE_PAT != '' }}
         continue-on-error: true
         uses: cezarypiatek/VsixPublisherAction@1.1
         with:
@@ -49,7 +49,7 @@ jobs:
           personal-access-code: ${{ secrets.VS_MARKETPLACE_PAT }}
 
       - name: Publish VS2019 Extension to Marketplace
-        if: secrets.VS_MARKETPLACE_PAT != ''
+        if: ${{ secrets.VS_MARKETPLACE_PAT != '' }}
         continue-on-error: true
         uses: cezarypiatek/VsixPublisherAction@1.1
         with:
