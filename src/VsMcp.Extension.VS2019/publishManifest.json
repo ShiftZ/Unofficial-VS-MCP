@@ -2,7 +2,7 @@
   "$schema": "http://json.schemastore.org/vsix-publish",
   "categories": ["build", "coding", "debugger"],
   "identity": {
-    "internalName": "VsMcp.Extension"
+    "internalName": "VsMcp.Extension.VS2019"
   },
   "overview": "README.md",
   "assetFiles": [],

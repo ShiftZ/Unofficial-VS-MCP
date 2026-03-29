@@ -1,0 +1,55 @@
+name: Publish to VS Marketplace
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v2
+
+      - name: Restore NuGet packages
+        run: nuget restore src\VsMcp.Extension\VsMcp.Extension.csproj -SolutionDirectory src
+
+      - name: Build VS2022/2026 Extension (Release)
+        run: msbuild src\VsMcp.Extension\VsMcp.Extension.csproj /p:Configuration=Release /p:DeployExtension=false /verbosity:minimal
+
+      - name: Restore NuGet packages (VS2019)
+        run: nuget restore src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj -SolutionDirectory src
+
+      - name: Build VS2019 Extension (Release)
+        run: msbuild src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj /p:Configuration=Release /p:DeployExtension=false /verbosity:minimal
+
+      - name: Publish VS2022/2026 Extension to Marketplace
+        uses: cezarypiatek/VsixPublisherAction@1.1
+        with:
+          extensionFile: src\VsMcp.Extension\VsMcp.Extension.vsix
+          publishManifestFile: src\VsMcp.Extension\publishManifest.json
+          personalAccessToken: ${{ secrets.VS_MARKETPLACE_PAT }}
+
+      - name: Publish VS2019 Extension to Marketplace
+        uses: cezarypiatek/VsixPublisherAction@1.1
+        with:
+          extensionFile: src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.vsix
+          publishManifestFile: src\VsMcp.Extension.VS2019\publishManifest.json
+          personalAccessToken: ${{ secrets.VS_MARKETPLACE_PAT }}
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create ${{ github.ref_name }} `
+            "src\VsMcp.Extension\VsMcp.Extension.vsix#VS MCP Server (VS 2022/2026)" `
+            "src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.vsix#VS MCP Server (VS 2019)" `
+            --title "${{ github.ref_name }}" `
+            --generate-notes
