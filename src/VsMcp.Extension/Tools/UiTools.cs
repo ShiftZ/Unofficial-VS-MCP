@@ -341,8 +341,15 @@ namespace VsMcp.Extension.Tools
                 }
             }
 
-            // Fallback: PrintWindow (may fail when the window is occluded)
-            return await Task.Run(() => CaptureWithPrintWindow(hwnd));
+            // Fallback: PrintWindow (may fail when the window is occluded or
+            // the app's UI thread is frozen, e.g. during a debug break).
+            // Use a timeout to avoid hanging indefinitely.
+            var printTask = Task.Run(() => CaptureWithPrintWindow(hwnd));
+            if (await Task.WhenAny(printTask, Task.Delay(3000)) == printTask)
+                return await printTask;
+
+            // PrintWindow timed out (likely debug break). Return null.
+            return null;
         }
 
         private static Bitmap CaptureWithPrintWindow(IntPtr hwnd)
