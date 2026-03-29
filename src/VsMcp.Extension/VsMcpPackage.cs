@@ -62,7 +62,7 @@ namespace VsMcp.Extension
             // Show status bar message
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
             var statusBar = (IVsStatusbar)await GetServiceAsync(typeof(SVsStatusbar));
-            statusBar?.SetText("vs-mcp 利用可能");
+            statusBar?.SetText("vs-mcp ready");
         }
 
         private async Task SubscribeSolutionEventsAsync()
