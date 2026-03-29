@@ -871,7 +871,17 @@ namespace VsMcp.Extension.Tools
                     {
                         var trimmed = line.Trim();
                         if (trimmed.StartsWith("The following Tests are available:") ||
-                            trimmed.Contains("テストを使用できます"))
+                            trimmed.Contains("テストを使用できます") ||
+                            trimmed.Contains("以下のテストを使用できます") ||
+                            trimmed.Contains("siguiente") ||    // es: Las siguientes pruebas están disponibles
+                            trimmed.Contains("tests suivants") || // fr: Les tests suivants sont disponibles
+                            trimmed.Contains("folgenden Tests") || // de: Die folgenden Tests sind verfügbar
+                            trimmed.Contains("test seguenti") || // it: I test seguenti sono disponibili
+                            trimmed.Contains("testes a seguir") || // pt-BR
+                            trimmed.Contains("следующие тесты") || // ru
+                            trimmed.Contains("다음 테스트를") ||    // ko
+                            trimmed.Contains("以下测试可用") ||     // zh-Hans
+                            trimmed.Contains("以下測試可用"))       // zh-Hant
                         {
                             parsing = true;
                             continue;
