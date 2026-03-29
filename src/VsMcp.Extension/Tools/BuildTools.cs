@@ -53,6 +53,18 @@ namespace VsMcp.Extension.Tools
                 args => GetBuildErrorsAsync(accessor));
         }
 
+        private static void StopDebuggingIfActive(DTE2 dte)
+        {
+            try
+            {
+                if (dte.Debugger.CurrentMode != dbgDebugMode.dbgDesignMode)
+                {
+                    dte.Debugger.Stop(true);
+                }
+            }
+            catch { }
+        }
+
         private static void ShowOutputWindow(DTE2 dte)
         {
             try
@@ -85,6 +97,7 @@ namespace VsMcp.Extension.Tools
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
 
+                StopDebuggingIfActive(dte);
                 ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
@@ -111,6 +124,7 @@ namespace VsMcp.Extension.Tools
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
 
+                StopDebuggingIfActive(dte);
                 ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
@@ -141,6 +155,7 @@ namespace VsMcp.Extension.Tools
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
 
+                StopDebuggingIfActive(dte);
                 ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
@@ -157,6 +172,7 @@ namespace VsMcp.Extension.Tools
                 var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
                     .Run(() => accessor.GetDteAsync());
 
+                StopDebuggingIfActive(dte);
                 ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
