@@ -8,20 +8,20 @@
 
 ## Features
 
-VS MCP Server exposes **106 tools** across the following categories:
+VS MCP Server exposes **109 tools** across the following categories:
 
 | Category | Tools | Description |
 |----------|------:|-------------|
 | General | 3 | Execute VS commands, get IDE status, view tool help |
 | Solution & Project | 5 | Open/close solutions, list/inspect projects |
-| Build | 5 | Build solution/project, clean, rebuild, get build errors |
+| Build | 6 | Build solution/project, clean, rebuild, get build errors, switch configuration |
 | Editor | 7 | Open/close/read/write/edit files, find in files |
 | Edit Preview | 4 | Diff preview, approve/reject edits with VS diff viewer |
 | Code Navigation | 3 | Go to definition, find references, go to implementation |
 | Solution Explorer | 6 | Add/remove projects, files, and references |
-| Debugger | 12 | Start/stop/restart, attach, stepping, call stack, locals, threads, evaluate |
+| Debugger | 13 | Start/stop/restart, attach, stepping, call stack, locals, threads, evaluate, run without debugging |
 | Breakpoints | 4 | Set/remove/list, enable/disable breakpoints |
-| Output & Diagnostics | 4 | Read/write output panes, error list, XAML binding errors |
+| Output & Diagnostics | 5 | Read/write/clear output panes, error list, XAML binding errors |
 | Console | 3 | Read console output, send input/keys, get console info for debugged apps |
 | UI Automation | 10 | Capture screenshots, inspect UI trees, find/click/right-click/drag/invoke elements |
 | Web | 12 | Browser automation via Chrome CDP and Firefox RDP — navigation, DOM, console, network, screenshots |
@@ -58,11 +58,12 @@ VS MCP Server exposes **106 tools** across the following categories:
 
 | Tool | Description |
 |------|-------------|
-| `build_solution` | Build the entire solution in Visual Studio |
-| `build_project` | Build a specific project |
-| `clean` | Clean the solution build output |
-| `rebuild` | Clean and rebuild the entire solution |
+| `build_solution` | Build the entire solution (auto-stops debugger if active) |
+| `build_project` | Build a specific project (auto-stops debugger if active) |
+| `clean` | Clean the solution build output (auto-stops debugger if active) |
+| `rebuild` | Clean and rebuild the entire solution (auto-stops debugger if active) |
 | `get_build_errors` | Get the list of build errors and warnings from the Visual Studio Error List |
+| `build_configuration` | Get or set the active solution build configuration and platform (e.g. Debug/Release, Any CPU/x64) |
 
 #### Editor
 
@@ -109,6 +110,7 @@ VS MCP Server exposes **106 tools** across the following categories:
 | Tool | Description |
 |------|-------------|
 | `debug_start` | Start debugging the startup project (equivalent to F5) |
+| `debug_start_without_debugging` | Start the startup project without the debugger attached (equivalent to Ctrl+F5) |
 | `debug_stop` | Stop debugging the current session |
 | `debug_restart` | Restart debugging the current session |
 | `debug_attach` | Attach the debugger to a running process by name or PID |
@@ -135,7 +137,8 @@ VS MCP Server exposes **106 tools** across the following categories:
 | Tool | Description |
 |------|-------------|
 | `output_write` | Write text to a Visual Studio Output window pane |
-| `output_read` | Read the content of a Visual Studio Output window pane |
+| `output_read` | Read the content of a Visual Studio Output window pane (supports regex pattern filtering) |
+| `output_clear` | Clear the content of a Visual Studio Output window pane |
 | `error_list_get` | Get all items from the Visual Studio Error List window |
 | `diagnostics_binding_errors` | Extract XAML/WPF binding errors from the Debug output pane |
 
@@ -151,7 +154,7 @@ VS MCP Server exposes **106 tools** across the following categories:
 
 | Tool | Description |
 |------|-------------|
-| `ui_capture_window` | Capture a screenshot of the debugged application's main window as a base64 PNG image |
+| `ui_capture_window` | Capture a screenshot of the debugged application's main window (uses WGC for reliable capture even when occluded; works during debug break) |
 | `ui_capture_region` | Capture a screenshot of a specific region of the debugged application's window |
 | `ui_get_tree` | Get the UI element tree of the debugged application's main window |
 | `ui_find_elements` | Find UI elements matching specified criteria in the debugged application |
