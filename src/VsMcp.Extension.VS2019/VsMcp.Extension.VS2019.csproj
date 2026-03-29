@@ -11,6 +11,7 @@
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <CopyOutputSymbolsToOutputDirectory>false</CopyOutputSymbolsToOutputDirectory>
     <NoWarn>VSTHRD010;VSTHRD110</NoWarn>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <!-- Explicit VSSDK properties that need early evaluation -->
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
@@ -27,6 +28,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="16.10.31321.278" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="16.11.71" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.Validation" Version="16.10.57" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
