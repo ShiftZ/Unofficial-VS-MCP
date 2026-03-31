@@ -28,8 +28,14 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.SDK" Version="16.10.31321.278" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="16.11.71" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.VisualStudio.Validation" Version="16.10.57" ExcludeAssets="runtime" />
     <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.22621.755" />
+    <!--
+      VS2019 may not have these "mutable" assemblies in its probing path,
+      especially on versions older than 16.10. Bundle them in the VSIX
+      so the extension is self-contained.
+    -->
+    <PackageReference Include="Microsoft.VisualStudio.Threading" Version="16.10.56" />
+    <PackageReference Include="Microsoft.VisualStudio.Validation" Version="16.10.35" />
   </ItemGroup>
 
   <ItemGroup>
@@ -83,7 +89,7 @@
   <!-- Publish StdioProxy and include in VSIX -->
   <PropertyGroup>
     <StdioProxyPublishDir>$(ProjectDir)obj\StdioProxy\</StdioProxyPublishDir>
-    <CreateVsixContainerDependsOn>PublishStdioProxy;$(CreateVsixContainerDependsOn)</CreateVsixContainerDependsOn>
+    <CreateVsixContainerDependsOn>IncludeNuGetAssembliesInVsix;PublishStdioProxy;$(CreateVsixContainerDependsOn)</CreateVsixContainerDependsOn>
   </PropertyGroup>
 
   <Target Name="PublishStdioProxy">
@@ -92,6 +98,20 @@
       <VSIXSourceItem Include="$(StdioProxyPublishDir)*.exe;$(StdioProxyPublishDir)*.dll;$(StdioProxyPublishDir)*.json">
         <VSIXSubPath>StdioProxy</VSIXSubPath>
       </VSIXSourceItem>
+    </ItemGroup>
+  </Target>
+
+  <!--
+    Include NuGet runtime assemblies (Threading, Validation, etc.) in VSIX.
+    The VSSDK build tools only auto-include project outputs, not NuGet package DLLs.
+  -->
+  <Target Name="IncludeNuGetAssembliesInVsix">
+    <ItemGroup>
+      <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Threading.dll" />
+      <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Validation.dll" />
+      <VSIXSourceItem Include="$(OutputPath)Microsoft.Bcl.AsyncInterfaces.dll" />
+      <VSIXSourceItem Include="$(OutputPath)System.Threading.Tasks.Extensions.dll" />
+      <VSIXSourceItem Include="$(OutputPath)System.Runtime.CompilerServices.Unsafe.dll" />
     </ItemGroup>
   </Target>
 
