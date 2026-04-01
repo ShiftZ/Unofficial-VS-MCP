@@ -5,7 +5,7 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>VsMcp.Extension</RootNamespace>
     <AssemblyName>VsMcp.Extension</AssemblyName>
-    <Version>0.5.1</Version>
+    <Version>0.5.2</Version>
     <UseCodebase>true</UseCodebase>
     <DeployExtension>false</DeployExtension>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
@@ -36,6 +36,13 @@
     -->
     <PackageReference Include="Microsoft.VisualStudio.Threading" Version="16.10.56" />
     <PackageReference Include="Microsoft.VisualStudio.Validation" Version="16.10.35" />
+    <!--
+      ThreadHelper lives in Shell.Framework in the v16.10 ref assemblies,
+      but older VS2019 runtimes may not have it there. Bundle explicitly.
+      ExcludeAssets="runtime" to avoid pulling transitive deps into output.
+      The DLL is copied to output by CopyShellFrameworkToOutput target below.
+    -->
+    <PackageReference Include="Microsoft.VisualStudio.Shell.Framework" Version="16.10.31321.278" ExcludeAssets="runtime" />
   </ItemGroup>
 
   <ItemGroup>
@@ -102,11 +109,23 @@
   </Target>
 
   <!--
+    Copy Shell.Framework.dll from NuGet cache to output so it can be bundled in VSIX.
+    We use ExcludeAssets="runtime" on the PackageReference to avoid transitive deps,
+    so we need to copy it manually.
+  -->
+  <Target Name="CopyShellFrameworkToOutput" AfterTargets="Build">
+    <Copy SourceFiles="$(NuGetPackageRoot)microsoft.visualstudio.shell.framework\16.10.31321.278\lib\net472\Microsoft.VisualStudio.Shell.Framework.dll"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <!--
     Include NuGet runtime assemblies (Threading, Validation, etc.) in VSIX.
     The VSSDK build tools only auto-include project outputs, not NuGet package DLLs.
   -->
   <Target Name="IncludeNuGetAssembliesInVsix">
     <ItemGroup>
+      <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Shell.Framework.dll" />
       <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Threading.dll" />
       <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Validation.dll" />
       <VSIXSourceItem Include="$(OutputPath)Microsoft.Bcl.AsyncInterfaces.dll" />
