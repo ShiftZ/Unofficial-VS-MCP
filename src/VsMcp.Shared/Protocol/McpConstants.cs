@@ -37,7 +37,9 @@ namespace VsMcp.Shared.Protocol
                 + "OFFLINE MODE: If a tool returns 'Visual Studio is not running', the error lists detected installations. "
                 + "Ask user which to start, then use PowerShell Start-Process. Wait 30s, then retry. "
                 + "If the error says 'no instance has <sln> open', VS is running but with a different solution. "
-                + "Ask the user to open the correct solution in VS, then retry.";
+                + "Ask the user to open the correct solution in VS, then retry. "
+                + "DEBUG_EVALUATE: After calling debug_evaluate, ALWAYS display the result to the user in your response text (e.g., 'expression = value (type)'). "
+                + "The result is also written to the VsMcp Output pane in Visual Studio.";
         }
     }
 }

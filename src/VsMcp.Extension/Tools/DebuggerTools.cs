@@ -484,6 +484,22 @@ namespace VsMcp.Extension.Tools
                 if (evalResult == null)
                     return McpToolResult.Error("Expression evaluation failed: no suitable managed frame found");
 
+                var resultText = $"[debug_evaluate] {expression} = {evalResult.Value}  ({evalResult.Type})";
+                try
+                {
+                    var outputWindow = dte.ToolWindows.OutputWindow;
+                    OutputWindowPane pane = null;
+                    foreach (OutputWindowPane p in outputWindow.OutputWindowPanes)
+                    {
+                        if (p.Name == "VsMcp") { pane = p; break; }
+                    }
+                    if (pane == null)
+                        pane = outputWindow.OutputWindowPanes.Add("VsMcp");
+                    pane.OutputString(resultText + Environment.NewLine);
+                    pane.Activate();
+                }
+                catch { /* best-effort */ }
+
                 return McpToolResult.Success(new
                 {
                     expression,

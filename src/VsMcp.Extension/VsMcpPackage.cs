@@ -1,6 +1,8 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using EnvDTE;
@@ -34,6 +36,38 @@ namespace VsMcp.Extension
         private McpToolRegistry _toolRegistry;
         private uint _solutionEventsCookie;
         private SolutionEvents _solutionEvents;
+
+        public VsMcpPackage()
+        {
+            // Redirect VS assembly loads to already-loaded versions.
+            // Fixes VS2019 where our compile-time Threading 16.10.0.0 reference
+            // may not match the VS runtime version, causing FileNotFoundException
+            // or MissingMethodException.
+            AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
+        }
+
+        private static Assembly OnAssemblyResolve(object sender, ResolveEventArgs args)
+        {
+            var requestedName = new AssemblyName(args.Name);
+
+            // For VS assemblies, redirect to already-loaded version in the process
+            if (requestedName.Name.StartsWith("Microsoft.VisualStudio."))
+            {
+                return AppDomain.CurrentDomain.GetAssemblies()
+                    .FirstOrDefault(a => a.GetName().Name == requestedName.Name);
+            }
+
+            // For other assemblies (e.g. Newtonsoft.Json), try loading from extension directory
+            var extensionDir = Path.GetDirectoryName(typeof(VsMcpPackage).Assembly.Location);
+            var candidatePath = Path.Combine(extensionDir, requestedName.Name + ".dll");
+            if (File.Exists(candidatePath))
+            {
+                try { return Assembly.LoadFrom(candidatePath); }
+                catch { /* fall through */ }
+            }
+
+            return null;
+        }
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {

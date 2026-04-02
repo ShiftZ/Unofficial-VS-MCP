@@ -5,7 +5,7 @@
     <LangVersion>latest</LangVersion>
     <RootNamespace>VsMcp.Extension</RootNamespace>
     <AssemblyName>VsMcp.Extension</AssemblyName>
-    <Version>0.5.2</Version>
+    <Version>0.5.3</Version>
     <UseCodebase>true</UseCodebase>
     <DeployExtension>false</DeployExtension>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
@@ -34,8 +34,19 @@
       especially on versions older than 16.10. Bundle them in the VSIX
       so the extension is self-contained.
     -->
-    <PackageReference Include="Microsoft.VisualStudio.Threading" Version="16.10.56" />
-    <PackageReference Include="Microsoft.VisualStudio.Validation" Version="16.10.35" />
+    <!--
+      Threading and Validation are provided by VS2019 at runtime.
+      Do NOT bundle them — bundling causes MissingMethodException
+      due to type identity mismatch between bundled and VS-loaded assemblies.
+      Transitive polyfill DLLs (AsyncInterfaces, Tasks.Extensions, Unsafe)
+      are still bundled as VS2019 may not have them.
+    -->
+    <PackageReference Include="Microsoft.VisualStudio.Threading" Version="16.10.56" ExcludeAssets="runtime" />
+    <PackageReference Include="Microsoft.VisualStudio.Validation" Version="16.10.35" ExcludeAssets="runtime" />
+    <!-- Polyfill DLLs needed by Threading at runtime; VS2019 may not have them -->
+    <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="6.0.0" />
+    <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.4" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.0.0" />
     <!--
       ThreadHelper lives in Shell.Framework in the v16.10 ref assemblies,
       but older VS2019 runtimes may not have it there. Bundle explicitly.
@@ -120,14 +131,14 @@
   </Target>
 
   <!--
-    Include NuGet runtime assemblies (Threading, Validation, etc.) in VSIX.
-    The VSSDK build tools only auto-include project outputs, not NuGet package DLLs.
+    Include polyfill assemblies in VSIX.
+    Threading and Validation are NOT bundled — VS2019 provides them at runtime.
+    Bundling them causes MissingMethodException due to type identity mismatch.
   -->
   <Target Name="IncludeNuGetAssembliesInVsix">
     <ItemGroup>
       <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Shell.Framework.dll" />
-      <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Threading.dll" />
-      <VSIXSourceItem Include="$(OutputPath)Microsoft.VisualStudio.Validation.dll" />
+      <VSIXSourceItem Include="$(OutputPath)Newtonsoft.Json.dll" />
       <VSIXSourceItem Include="$(OutputPath)Microsoft.Bcl.AsyncInterfaces.dll" />
       <VSIXSourceItem Include="$(OutputPath)System.Threading.Tasks.Extensions.dll" />
       <VSIXSourceItem Include="$(OutputPath)System.Runtime.CompilerServices.Unsafe.dll" />
