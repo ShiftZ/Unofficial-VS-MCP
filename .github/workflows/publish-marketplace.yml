@@ -37,15 +37,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $tag = "${{ github.ref_name }}"
-          # Delete existing release if present (overwrite)
+          # Delete existing release and tag if present (overwrite)
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            gh release delete $tag --yes
+            gh release delete $tag --yes --cleanup-tag
           }
           gh release create $tag `
             "src\VsMcp.Extension\VsMcp.Extension.vsix#VS MCP Server (VS 2022/2026)" `
             "src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.vsix#VS MCP Server (VS 2019)" `
             --title $tag `
+            --target ${{ github.sha }} `
             --generate-notes
 
       - name: Publish VS2022/2026 Extension to Marketplace
