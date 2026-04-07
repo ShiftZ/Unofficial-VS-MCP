@@ -101,10 +101,12 @@ namespace VsMcp.Extension.Tools
             { "ui_find_elements", "UI" },
             { "ui_get_element", "UI" },
             { "ui_click", "UI" },
+            { "ui_double_click", "UI" },
             { "ui_right_click", "UI" },
             { "ui_drag", "UI" },
             { "ui_set_value", "UI" },
             { "ui_invoke", "UI" },
+            { "ui_send_keys", "UI" },
             // Console
             { "console_read", "Console" },
             { "console_send", "Console" },
@@ -218,7 +220,9 @@ namespace VsMcp.Extension.Tools
                         + "For elements outside the window, use ui_find_elements to locate the element by name, then use ui_click with the name parameter or ui_invoke with AutomationId instead of coordinates. "
                         + "DRAG AND HIT-TESTING: ui_drag sends Win32 mouse events, so WPF visual hit-testing applies. "
                         + "If a visual element overlaps the drag start position, the event goes to that element instead of the intended target. "
-                        + "When drag does not work as expected, use ui_get_tree or ui_find_elements to check what element is at the start position.",
+                        + "When drag does not work as expected, use ui_get_tree or ui_find_elements to check what element is at the start position. "
+                        + "KEYBOARD INPUT: Use ui_send_keys to send keyboard shortcuts (e.g. 'ctrl+f', 'ctrl+s', 'alt+f4') or type text. "
+                        + "The tool brings the debugged app's window to the foreground before sending keys via Win32 SendInput.",
                     web_debugging = "Use web_connect to connect to Chrome/Edge (via CDP) or Firefox (via RDP). "
                         + "Chrome/Edge: start with --remote-debugging-port (e.g. chrome --remote-debugging-port=9222). Auto-detection scans ports 9222-9229. "
                         + "Firefox: start with -start-debugger-server (e.g. firefox -start-debugger-server 6000). Requires devtools.debugger.remote-enabled=true in about:config. "

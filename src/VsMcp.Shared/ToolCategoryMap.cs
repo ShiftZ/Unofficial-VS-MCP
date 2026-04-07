@@ -100,10 +100,12 @@ namespace VsMcp.Shared
             { "ui_find_elements", "UI" },
             { "ui_get_element", "UI" },
             { "ui_click", "UI" },
+            { "ui_double_click", "UI" },
             { "ui_right_click", "UI" },
             { "ui_drag", "UI" },
             { "ui_set_value", "UI" },
             { "ui_invoke", "UI" },
+            { "ui_send_keys", "UI" },
             // Console
             { "console_read", "Console" },
             { "console_send", "Console" },

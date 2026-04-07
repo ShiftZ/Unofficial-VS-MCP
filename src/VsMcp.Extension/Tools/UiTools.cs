@@ -58,6 +58,87 @@ namespace VsMcp.Extension.Tools
         private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
         private const uint PW_RENDERFULLCONTENT = 0x00000002;
 
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, INPUT[] pInputs, int cbSize);
+
+        [DllImport("user32.dll")]
+        private static extern short VkKeyScan(char ch);
+
+        [DllImport("user32.dll")]
+        private static extern uint MapVirtualKey(uint uCode, uint uMapType);
+
+        private const int INPUT_KEYBOARD = 1;
+        private const uint KEYEVENTF_KEYUP = 0x0002;
+        private const uint KEYEVENTF_SCANCODE = 0x0008;
+        private const uint KEYEVENTF_EXTENDEDKEY = 0x0001;
+        private const uint MAPVK_VK_TO_VSC = 0;
+
+        private const ushort VK_SHIFT = 0x10;
+        private const ushort VK_CONTROL = 0x11;
+        private const ushort VK_MENU = 0x12; // Alt
+        private const ushort VK_LWIN = 0x5B;
+        private const ushort VK_RETURN = 0x0D;
+        private const ushort VK_ESCAPE = 0x1B;
+        private const ushort VK_TAB = 0x09;
+        private const ushort VK_BACK = 0x08;
+        private const ushort VK_DELETE = 0x2E;
+        private const ushort VK_INSERT = 0x2D;
+        private const ushort VK_HOME = 0x24;
+        private const ushort VK_END = 0x23;
+        private const ushort VK_PRIOR = 0x21; // PageUp
+        private const ushort VK_NEXT = 0x22;  // PageDown
+        private const ushort VK_UP = 0x26;
+        private const ushort VK_DOWN = 0x28;
+        private const ushort VK_LEFT = 0x25;
+        private const ushort VK_RIGHT = 0x27;
+        private const ushort VK_SPACE = 0x20;
+        private const ushort VK_F1 = 0x70;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT
+        {
+            public int type;
+            public INPUTUNION union;
+        }
+
+        [StructLayout(LayoutKind.Explicit)]
+        private struct INPUTUNION
+        {
+            [FieldOffset(0)] public KEYBDINPUT ki;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT
+        {
+            public ushort wVk;
+            public ushort wScan;
+            public uint dwFlags;
+            public uint time;
+            public IntPtr dwExtraInfo;
+        }
+
+        private static readonly Dictionary<string, ushort> NamedKeys = new Dictionary<string, ushort>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "enter", VK_RETURN }, { "return", VK_RETURN },
+            { "esc", VK_ESCAPE }, { "escape", VK_ESCAPE },
+            { "tab", VK_TAB },
+            { "backspace", VK_BACK }, { "bs", VK_BACK },
+            { "delete", VK_DELETE }, { "del", VK_DELETE },
+            { "insert", VK_INSERT }, { "ins", VK_INSERT },
+            { "home", VK_HOME }, { "end", VK_END },
+            { "pageup", VK_PRIOR }, { "pgup", VK_PRIOR },
+            { "pagedown", VK_NEXT }, { "pgdn", VK_NEXT },
+            { "up", VK_UP }, { "down", VK_DOWN },
+            { "left", VK_LEFT }, { "right", VK_RIGHT },
+            { "space", VK_SPACE },
+            { "f1", VK_F1 }, { "f2", (ushort)(VK_F1 + 1) },
+            { "f3", (ushort)(VK_F1 + 2) }, { "f4", (ushort)(VK_F1 + 3) },
+            { "f5", (ushort)(VK_F1 + 4) }, { "f6", (ushort)(VK_F1 + 5) },
+            { "f7", (ushort)(VK_F1 + 6) }, { "f8", (ushort)(VK_F1 + 7) },
+            { "f9", (ushort)(VK_F1 + 8) }, { "f10", (ushort)(VK_F1 + 9) },
+            { "f11", (ushort)(VK_F1 + 10) }, { "f12", (ushort)(VK_F1 + 11) },
+        };
+
         #endregion
 
         private const int UiaTimeoutSeconds = 30;
@@ -165,6 +246,19 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "ui_double_click",
+                    "Double-click a UI element by AutomationId, Name, or screen coordinates",
+                    SchemaBuilder.Create()
+                        .AddString("automationId", "AutomationId of the UI element to double-click")
+                        .AddString("name", "Name of the UI element to double-click (used if automationId is not provided)")
+                        .AddInteger("x", "Screen X coordinate to double-click (used if automationId and name are not provided)")
+                        .AddInteger("y", "Screen Y coordinate to double-click (used if automationId and name are not provided)")
+                        .AddInteger("waitMs", "Milliseconds to wait after double-clicking (default: 0)")
+                        .Build()),
+                args => UiDoubleClickAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
                     "ui_right_click",
                     "Right-click a UI element by AutomationId, Name, or screen coordinates to open context menus",
                     SchemaBuilder.Create()
@@ -208,6 +302,22 @@ namespace VsMcp.Extension.Tools
                         .AddString("automationId", "AutomationId of the UI element", required: true)
                         .Build()),
                 args => UiInvokeAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
+                    "ui_send_keys",
+                    "Send keyboard input to the debugged application's foreground window. " +
+                    "Use 'keys' for key combinations (e.g. 'ctrl+f', 'alt+f4', 'shift+ctrl+s', 'enter', 'f5') " +
+                    "or 'text' to type a string of characters. Modifier keys: ctrl, shift, alt, win. " +
+                    "Named keys: enter, escape/esc, tab, backspace/bs, delete/del, insert/ins, home, end, " +
+                    "pageup/pgup, pagedown/pgdn, up, down, left, right, space, f1-f12. " +
+                    "For single characters like 'a', 'A', '1', use keys='a'. Multiple key presses can be separated with spaces: keys='tab tab enter'.",
+                    SchemaBuilder.Create()
+                        .AddString("keys", "Key combination or sequence to send (e.g. 'ctrl+f', 'alt+tab', 'enter', 'tab tab enter')")
+                        .AddString("text", "Text string to type character by character")
+                        .AddInteger("waitMs", "Milliseconds to wait after sending keys (default: 0)")
+                        .Build()),
+                args => UiSendKeysAsync(accessor, args));
         }
 
         #region Debuggee Window Handle
@@ -898,6 +1008,75 @@ namespace VsMcp.Extension.Tools
             }
         }
 
+        private static async Task<McpToolResult> UiDoubleClickAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var automationId = args.Value<string>("automationId");
+            var name = args.Value<string>("name");
+            var x = args.Value<int?>("x");
+            var y = args.Value<int?>("y");
+            var waitMs = args.Value<int?>("waitMs") ?? 0;
+
+            if (string.IsNullOrEmpty(automationId) && string.IsNullOrEmpty(name) && (!x.HasValue || !y.HasValue))
+                return McpToolResult.Error("Either 'automationId', 'name', or both 'x' and 'y' coordinates are required");
+
+            int clickX, clickY;
+
+            if (!string.IsNullOrEmpty(automationId) || !string.IsNullOrEmpty(name))
+            {
+                try
+                {
+                    var coords = await ResolveElementCoordinatesAsync(accessor, automationId, name);
+                    if (coords == null)
+                    {
+                        var desc = !string.IsNullOrEmpty(automationId)
+                            ? $"AutomationId '{automationId}'"
+                            : $"Name '{name}'";
+                        return McpToolResult.Error($"Element with {desc} not found or has no bounding rectangle. Make sure debugging is active.");
+                    }
+                    clickX = coords.Value.x;
+                    clickY = coords.Value.y;
+                }
+                catch (TimeoutException ex)
+                {
+                    return McpToolResult.Error(ex.Message);
+                }
+            }
+            else
+            {
+                clickX = x.Value;
+                clickY = y.Value;
+            }
+
+            var hwnd = await accessor.RunOnUIThreadAsync(() => GetDebuggeeWindowHandle(accessor));
+
+            var boundsError = await Task.Run(() => ValidateCoordinatesInWindow(hwnd, clickX, clickY));
+            if (boundsError != null)
+                return McpToolResult.Error(boundsError);
+
+            await Task.Run(() =>
+            {
+                if (hwnd != IntPtr.Zero)
+                {
+                    SetForegroundWindow(hwnd);
+                    System.Threading.Thread.Sleep(100);
+                }
+
+                PerformDoubleClick(clickX, clickY);
+            });
+
+            var result = McpToolResult.Success(new
+            {
+                message = $"Double-clicked at ({clickX}, {clickY})",
+                x = clickX,
+                y = clickY
+            });
+
+            if (waitMs > 0)
+                await Task.Delay(Math.Min(waitMs, 10000));
+
+            return result;
+        }
+
         private static async Task<McpToolResult> UiRightClickAsync(VsServiceAccessor accessor, JObject args)
         {
             var automationId = args.Value<string>("automationId");
@@ -1015,6 +1194,195 @@ namespace VsMcp.Extension.Tools
             });
         }
 
+        private static async Task<McpToolResult> UiSendKeysAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var keys = args.Value<string>("keys");
+            var text = args.Value<string>("text");
+            var waitMs = args.Value<int?>("waitMs") ?? 0;
+
+            if (string.IsNullOrEmpty(keys) && string.IsNullOrEmpty(text))
+                return McpToolResult.Error("Either 'keys' or 'text' must be provided");
+
+            var hwnd = await accessor.RunOnUIThreadAsync(() => GetDebuggeeWindowHandle(accessor));
+            if (hwnd == IntPtr.Zero)
+                return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
+
+            string description;
+
+            await Task.Run(() =>
+            {
+                SetForegroundWindow(hwnd);
+                System.Threading.Thread.Sleep(100);
+            });
+
+            if (!string.IsNullOrEmpty(text))
+            {
+                // Type text character by character
+                await Task.Run(() =>
+                {
+                    foreach (char ch in text)
+                    {
+                        SendCharacter(ch);
+                        System.Threading.Thread.Sleep(10);
+                    }
+                });
+                description = $"Typed text: \"{text}\"";
+            }
+            else
+            {
+                // Parse and send key combinations/sequences
+                // Split by spaces for sequences like "tab tab enter"
+                var keySequence = keys.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                var sentKeys = new List<string>();
+
+                await Task.Run(() =>
+                {
+                    foreach (var keyCombo in keySequence)
+                    {
+                        SendKeyCombo(keyCombo);
+                        sentKeys.Add(keyCombo);
+                        if (keySequence.Length > 1)
+                            System.Threading.Thread.Sleep(30);
+                    }
+                });
+                description = $"Sent keys: {string.Join(" ", sentKeys)}";
+            }
+
+            if (waitMs > 0)
+                await Task.Delay(Math.Min(waitMs, 10000));
+
+            return McpToolResult.Success(new
+            {
+                message = description
+            });
+        }
+
+        /// <summary>
+        /// Sends a single character using SendInput.
+        /// Uses VkKeyScan to map the character to a virtual key code.
+        /// </summary>
+        private static void SendCharacter(char ch)
+        {
+            short vkResult = VkKeyScan(ch);
+            if (vkResult == -1)
+            {
+                // Character not mappable, skip
+                return;
+            }
+
+            byte vk = (byte)(vkResult & 0xFF);
+            byte shiftState = (byte)((vkResult >> 8) & 0xFF);
+
+            var inputs = new List<INPUT>();
+
+            // Press modifiers if needed
+            if ((shiftState & 1) != 0) // Shift
+                inputs.Add(MakeKeyInput(VK_SHIFT, false));
+            if ((shiftState & 2) != 0) // Ctrl
+                inputs.Add(MakeKeyInput(VK_CONTROL, false));
+            if ((shiftState & 4) != 0) // Alt
+                inputs.Add(MakeKeyInput(VK_MENU, false));
+
+            // Key down + up
+            inputs.Add(MakeKeyInput(vk, false));
+            inputs.Add(MakeKeyInput(vk, true));
+
+            // Release modifiers
+            if ((shiftState & 4) != 0)
+                inputs.Add(MakeKeyInput(VK_MENU, true));
+            if ((shiftState & 2) != 0)
+                inputs.Add(MakeKeyInput(VK_CONTROL, true));
+            if ((shiftState & 1) != 0)
+                inputs.Add(MakeKeyInput(VK_SHIFT, true));
+
+            var inputArray = inputs.ToArray();
+            SendInput((uint)inputArray.Length, inputArray, Marshal.SizeOf(typeof(INPUT)));
+        }
+
+        /// <summary>
+        /// Sends a key combination like "ctrl+f", "alt+f4", "shift+ctrl+s", or a single key like "enter".
+        /// </summary>
+        private static void SendKeyCombo(string combo)
+        {
+            var parts = combo.Split(new[] { '+' }, StringSplitOptions.RemoveEmptyEntries);
+
+            var modifiers = new List<ushort>();
+            ushort mainKey = 0;
+
+            foreach (var part in parts)
+            {
+                var p = part.Trim().ToLowerInvariant();
+                if (p == "ctrl" || p == "control")
+                    modifiers.Add(VK_CONTROL);
+                else if (p == "shift")
+                    modifiers.Add(VK_SHIFT);
+                else if (p == "alt")
+                    modifiers.Add(VK_MENU);
+                else if (p == "win" || p == "windows")
+                    modifiers.Add(VK_LWIN);
+                else if (NamedKeys.TryGetValue(p, out ushort namedVk))
+                    mainKey = namedVk;
+                else if (p.Length == 1)
+                {
+                    // Single character — map to virtual key
+                    char ch = char.ToUpperInvariant(p[0]);
+                    if (ch >= 'A' && ch <= 'Z')
+                        mainKey = (ushort)ch; // VK_A..VK_Z match ASCII
+                    else if (ch >= '0' && ch <= '9')
+                        mainKey = (ushort)ch; // VK_0..VK_9 match ASCII
+                    else
+                    {
+                        short vk = VkKeyScan(p[0]);
+                        if (vk != -1)
+                            mainKey = (ushort)(vk & 0xFF);
+                    }
+                }
+            }
+
+            if (mainKey == 0 && modifiers.Count == 0)
+                return;
+
+            var inputs = new List<INPUT>();
+
+            // Press modifiers
+            foreach (var mod in modifiers)
+                inputs.Add(MakeKeyInput(mod, false));
+
+            // Press and release main key
+            if (mainKey != 0)
+            {
+                inputs.Add(MakeKeyInput(mainKey, false));
+                inputs.Add(MakeKeyInput(mainKey, true));
+            }
+
+            // Release modifiers in reverse order
+            for (int i = modifiers.Count - 1; i >= 0; i--)
+                inputs.Add(MakeKeyInput(modifiers[i], true));
+
+            var inputArray = inputs.ToArray();
+            SendInput((uint)inputArray.Length, inputArray, Marshal.SizeOf(typeof(INPUT)));
+        }
+
+        private static INPUT MakeKeyInput(ushort vk, bool keyUp)
+        {
+            var scan = (ushort)MapVirtualKey(vk, MAPVK_VK_TO_VSC);
+            return new INPUT
+            {
+                type = INPUT_KEYBOARD,
+                union = new INPUTUNION
+                {
+                    ki = new KEYBDINPUT
+                    {
+                        wVk = vk,
+                        wScan = scan,
+                        dwFlags = keyUp ? KEYEVENTF_KEYUP : 0,
+                        time = 0,
+                        dwExtraInfo = IntPtr.Zero
+                    }
+                }
+            };
+        }
+
         #endregion
 
         #region Helpers
@@ -1073,6 +1441,18 @@ namespace VsMcp.Extension.Tools
             WithDpiAwareness(() =>
             {
                 SetCursorPos(x, y);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+            });
+        }
+
+        private static void PerformDoubleClick(int x, int y)
+        {
+            WithDpiAwareness(() =>
+            {
+                SetCursorPos(x, y);
+                mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+                mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
             });
