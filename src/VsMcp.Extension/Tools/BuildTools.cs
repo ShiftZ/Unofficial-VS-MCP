@@ -138,7 +138,16 @@ namespace VsMcp.Extension.Tools
                 ShowOutputWindow(dte);
 
                 var sb = (SolutionBuild2)dte.Solution.SolutionBuild;
-                var config = sb.ActiveConfiguration?.Name ?? "Debug";
+                string config;
+                try
+                {
+                    var activeConfig = (SolutionConfiguration2)sb.ActiveConfiguration;
+                    config = activeConfig.Name + "|" + activeConfig.PlatformName;
+                }
+                catch
+                {
+                    config = sb.ActiveConfiguration?.Name ?? "Debug";
+                }
 
                 // Find the project unique name (recursing into solution folders)
                 string uniqueName = FindProjectUniqueName(dte.Solution.Projects, name);
