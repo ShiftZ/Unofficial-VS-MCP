@@ -8,7 +8,7 @@
 
 ## Features
 
-VS MCP Server exposes **109 tools** across the following categories:
+VS MCP Server exposes **111 tools** across the following categories:
 
 | Category | Tools | Description |
 |----------|------:|-------------|
@@ -160,10 +160,12 @@ VS MCP Server exposes **109 tools** across the following categories:
 | `ui_find_elements` | Find UI elements matching specified criteria in the debugged application |
 | `ui_get_element` | Get detailed properties of a specific UI element by its AutomationId |
 | `ui_click` | Click a UI element by AutomationId, Name, or screen coordinates |
+| `ui_double_click` | Double-click a UI element by AutomationId, Name, or screen coordinates |
 | `ui_right_click` | Right-click a UI element by AutomationId, Name, or screen coordinates |
 | `ui_drag` | Perform a drag-and-drop operation from start coordinates to end coordinates |
 | `ui_set_value` | Set the value of a UI element using ValuePattern |
 | `ui_invoke` | Invoke the default action on a UI element using InvokePattern |
+| `ui_send_keys` | Send keyboard input (shortcuts like `ctrl+f`, text typing) to the debugged application |
 
 #### Watch
 
