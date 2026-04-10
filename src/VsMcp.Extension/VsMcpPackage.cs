@@ -87,6 +87,7 @@ namespace VsMcp.Extension
             _httpServer.Start();
 
             DeployStdioProxy();
+            DeploySkills();
 
             // Subscribe to solution events for state tracking
             await SubscribeSolutionEventsAsync();
@@ -221,6 +222,80 @@ namespace VsMcp.Extension
             catch (Exception ex)
             {
                 Debug.WriteLine($"[VsMcp] Failed to deploy StdioProxy: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Copies bundled Claude Code skills (under {extension}\Skills\) to the user's
+        /// global Claude skill directory so they are picked up automatically by Claude Code.
+        /// Existing files are overwritten only when the source content differs.
+        /// </summary>
+        private void DeploySkills()
+        {
+            try
+            {
+                var extensionDir = Path.GetDirectoryName(typeof(VsMcpPackage).Assembly.Location);
+                var skillsSourceDir = Path.Combine(extensionDir, "Skills");
+
+                if (!Directory.Exists(skillsSourceDir))
+                {
+                    Debug.WriteLine("[VsMcp] Skills source directory not found in extension, skipping deploy");
+                    return;
+                }
+
+                var skillsTargetRoot = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    ".claude", "skills");
+
+                Directory.CreateDirectory(skillsTargetRoot);
+
+                int copied = 0;
+                foreach (var sourceFile in Directory.GetFiles(skillsSourceDir, "*", SearchOption.AllDirectories))
+                {
+                    var relative = sourceFile.Substring(skillsSourceDir.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    var targetFile = Path.Combine(skillsTargetRoot, relative);
+                    Directory.CreateDirectory(Path.GetDirectoryName(targetFile));
+
+                    if (File.Exists(targetFile) && FilesHaveSameContent(sourceFile, targetFile))
+                        continue;
+
+                    File.Copy(sourceFile, targetFile, true);
+                    copied++;
+                }
+
+                Debug.WriteLine($"[VsMcp] Skills deployed to {skillsTargetRoot} ({copied} file(s) updated)");
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[VsMcp] Failed to deploy Skills: {ex.Message}");
+            }
+        }
+
+        private static bool FilesHaveSameContent(string a, string b)
+        {
+            try
+            {
+                var ai = new FileInfo(a);
+                var bi = new FileInfo(b);
+                if (ai.Length != bi.Length)
+                    return false;
+
+                using (var sha = System.Security.Cryptography.SHA256.Create())
+                using (var sa = File.OpenRead(a))
+                using (var sb = File.OpenRead(b))
+                {
+                    var ha = sha.ComputeHash(sa);
+                    var hb = sha.ComputeHash(sb);
+                    if (ha.Length != hb.Length)
+                        return false;
+                    for (int i = 0; i < ha.Length; i++)
+                        if (ha[i] != hb[i]) return false;
+                    return true;
+                }
+            }
+            catch
+            {
+                return false;
             }
         }
 

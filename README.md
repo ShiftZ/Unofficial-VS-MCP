@@ -402,6 +402,20 @@ You can also specify individual category names (e.g. `--tools General,Build,Debu
 - If VS is restarted, StdioProxy automatically reconnects on the next `tools/call` request.
 - Stale port files from crashed or closed VS instances are cleaned up automatically during discovery.
 
+## Bundled Claude Code Skills
+
+The VS Extension ships a small set of Claude Code skills that complement the MCP
+tools. They are deployed automatically on extension startup to
+`%USERPROFILE%\.claude\skills\`, so Claude Code picks them up without manual setup.
+
+| Skill | Purpose |
+|-------|---------|
+| `vs-ui-explore` | Autonomous UI crawl of a VS debuggee — drives the app via `ui_snapshot`, `ui_find_elements`, and the `ui_wait_*` primitives, then reports crashes, error dialogs, unreachable screens, and disabled-but-expected states. Trigger it with prompts like "crawl the UI and report bugs". |
+
+Source files live under `src/VsMcp.Extension/Skills/`; edit them there and the
+extension will redeploy the updated copy on next launch (it compares file
+content and skips unchanged files).
+
 ## Contributing
 
 **Pull Requests are not accepted.**
