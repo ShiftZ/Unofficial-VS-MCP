@@ -1116,27 +1116,40 @@ namespace VsMcp.Extension.Tools
             var searchTask = RunOnBackgroundSTAAsync(() =>
             {
                 IEnumerable<AutomationElement> roots;
+                var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, pid);
+                var processWindows = AutomationElement.RootElement.FindAll(TreeScope.Children, pidCondition);
+                McpServer.McpRequestRouter.Log($"[FindElements STA] FindAll done, {processWindows.Count} windows found");
+
                 if (!string.IsNullOrEmpty(ancestorAutomationId))
                 {
-                    var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, pid);
-                    var ancestorCondition = new AndCondition(
-                        pidCondition,
-                        new PropertyCondition(AutomationElement.AutomationIdProperty, ancestorAutomationId));
-                    var ancestor = AutomationElement.RootElement.FindFirst(TreeScope.Descendants, ancestorCondition);
+                    // Scope the ancestor lookup to the debuggee's top-level windows.
+                    // RootElement.FindFirst(TreeScope.Descendants, ...) walks the entire desktop
+                    // and is known to silently miss deeply-nested elements, so walk each window
+                    // subtree explicitly.
+                    var ancestorIdCondition = new PropertyCondition(AutomationElement.AutomationIdProperty, ancestorAutomationId);
+                    AutomationElement ancestor = null;
+                    foreach (AutomationElement w in processWindows)
+                    {
+                        if (string.Equals(w.Current.AutomationId ?? string.Empty, ancestorAutomationId, StringComparison.Ordinal))
+                        {
+                            ancestor = w;
+                            break;
+                        }
+                        ancestor = w.FindFirst(TreeScope.Descendants, ancestorIdCondition);
+                        if (ancestor != null) break;
+                    }
+
                     if (ancestor == null)
                     {
-                        McpServer.McpRequestRouter.Log($"[FindElements STA] ancestorAutomationId '{ancestorAutomationId}' not found");
+                        McpServer.McpRequestRouter.Log($"[FindElements STA] ancestorAutomationId '{ancestorAutomationId}' not found in debuggee");
                         return false;
                     }
                     roots = new[] { ancestor };
                 }
                 else
                 {
-                    var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, pid);
-                    var windows = AutomationElement.RootElement.FindAll(TreeScope.Children, pidCondition);
-                    McpServer.McpRequestRouter.Log($"[FindElements STA] FindAll done, {windows.Count} windows found");
                     var list = new List<AutomationElement>();
-                    foreach (AutomationElement w in windows) list.Add(w);
+                    foreach (AutomationElement w in processWindows) list.Add(w);
                     roots = list;
                 }
 
