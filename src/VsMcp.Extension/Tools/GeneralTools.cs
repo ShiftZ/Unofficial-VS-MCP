@@ -97,6 +97,7 @@ namespace VsMcp.Extension.Tools
             // UI Automation
             { "ui_capture_window", "UI" },
             { "ui_capture_region", "UI" },
+            { "ui_snapshot", "UI" },
             { "ui_get_tree", "UI" },
             { "ui_find_elements", "UI" },
             { "ui_get_element", "UI" },
@@ -107,6 +108,8 @@ namespace VsMcp.Extension.Tools
             { "ui_set_value", "UI" },
             { "ui_invoke", "UI" },
             { "ui_send_keys", "UI" },
+            { "ui_wait_for_element", "UI" },
+            { "ui_wait_idle", "UI" },
             // Console
             { "console_read", "Console" },
             { "console_send", "Console" },
