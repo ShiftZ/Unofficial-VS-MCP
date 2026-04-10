@@ -1125,26 +1125,29 @@ namespace VsMcp.Extension.Tools
                     // Scope the ancestor lookup to the debuggee's top-level windows.
                     // RootElement.FindFirst(TreeScope.Descendants, ...) walks the entire desktop
                     // and is known to silently miss deeply-nested elements, so walk each window
-                    // subtree explicitly.
+                    // subtree explicitly. Use FindAll because a single AutomationId may resolve
+                    // to multiple elements (e.g. an offscreen placeholder plus the real control);
+                    // walking all of them yields a useful union instead of missing the real one.
                     var ancestorIdCondition = new PropertyCondition(AutomationElement.AutomationIdProperty, ancestorAutomationId);
-                    AutomationElement ancestor = null;
+                    var ancestors = new List<AutomationElement>();
                     foreach (AutomationElement w in processWindows)
                     {
                         if (string.Equals(w.Current.AutomationId ?? string.Empty, ancestorAutomationId, StringComparison.Ordinal))
                         {
-                            ancestor = w;
-                            break;
+                            ancestors.Add(w);
                         }
-                        ancestor = w.FindFirst(TreeScope.Descendants, ancestorIdCondition);
-                        if (ancestor != null) break;
+                        var matches = w.FindAll(TreeScope.Descendants, ancestorIdCondition);
+                        foreach (AutomationElement m in matches)
+                            ancestors.Add(m);
                     }
 
-                    if (ancestor == null)
+                    if (ancestors.Count == 0)
                     {
                         McpServer.McpRequestRouter.Log($"[FindElements STA] ancestorAutomationId '{ancestorAutomationId}' not found in debuggee");
                         return false;
                     }
-                    roots = new[] { ancestor };
+                    McpServer.McpRequestRouter.Log($"[FindElements STA] ancestorAutomationId '{ancestorAutomationId}' resolved to {ancestors.Count} element(s)");
+                    roots = ancestors;
                 }
                 else
                 {
