@@ -240,6 +240,38 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "ui_wait_for_element",
+                    "Wait until a UI element matching the given criteria reaches the specified state. " +
+                    "Polls the UI Automation tree at regular intervals and returns as soon as the condition " +
+                    "is met or the timeout elapses. States: 'appears' (default), 'disappears', 'enabled', 'focused'. " +
+                    "Use this instead of sleeping after triggering a UI action.",
+                    SchemaBuilder.Create()
+                        .AddString("name", "Name of the UI element to match")
+                        .AddString("automationId", "AutomationId of the UI element to match")
+                        .AddString("className", "ClassName of the UI element to match")
+                        .AddString("controlType", "ControlType programmatic name (e.g. 'ControlType.Button')")
+                        .AddString("state", "Target state: 'appears' (default), 'disappears', 'enabled', 'focused'")
+                        .AddInteger("timeoutMs", "Maximum time to wait in milliseconds (default: 10000)")
+                        .AddInteger("pollIntervalMs", "Polling interval in milliseconds (default: 200)")
+                        .Build()),
+                args => UiWaitForElementAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
+                    "ui_wait_idle",
+                    "Wait until the UI Automation tree stops changing for a quiet period. " +
+                    "Useful after triggering an action that may cause asynchronous UI updates (loading, layout, " +
+                    "progressive rendering). Returns as soon as the element count is stable for quietMs, " +
+                    "or when the timeout is reached.",
+                    SchemaBuilder.Create()
+                        .AddInteger("quietMs", "How long the tree must be stable to be considered idle (default: 500)")
+                        .AddInteger("timeoutMs", "Maximum time to wait in milliseconds (default: 5000)")
+                        .AddInteger("pollIntervalMs", "Polling interval in milliseconds (default: 150)")
+                        .Build()),
+                args => UiWaitIdleAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
                     "ui_get_element",
                     "Get detailed properties of a specific UI element by its AutomationId",
                     SchemaBuilder.Create()
@@ -780,6 +812,213 @@ namespace VsMcp.Extension.Tools
                 });
             }
             return result;
+        }
+
+        private static async Task<McpToolResult> UiWaitForElementAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var name = args.Value<string>("name");
+            var automationId = args.Value<string>("automationId");
+            var className = args.Value<string>("className");
+            var controlTypeName = args.Value<string>("controlType");
+            var state = (args.Value<string>("state") ?? "appears").ToLowerInvariant();
+            var timeoutMs = args.Value<int?>("timeoutMs") ?? 10000;
+            var pollIntervalMs = args.Value<int?>("pollIntervalMs") ?? 200;
+
+            if (string.IsNullOrEmpty(name) && string.IsNullOrEmpty(automationId)
+                && string.IsNullOrEmpty(className) && string.IsNullOrEmpty(controlTypeName))
+            {
+                return McpToolResult.Error("At least one search criterion must be provided (name, automationId, className, or controlType)");
+            }
+            if (timeoutMs < 0) timeoutMs = 0;
+            if (pollIntervalMs < 50) pollIntervalMs = 50;
+
+            ControlType controlType = null;
+            if (!string.IsNullOrEmpty(controlTypeName))
+            {
+                controlType = ParseControlType(controlTypeName);
+                if (controlType == null)
+                    return McpToolResult.Error($"Unknown controlType: {controlTypeName}");
+            }
+
+            if (state != "appears" && state != "disappears" && state != "enabled" && state != "focused")
+                return McpToolResult.Error($"Unknown state: {state}. Expected one of: appears, disappears, enabled, focused");
+
+            var pid = await accessor.RunOnUIThreadAsync(() => GetDebuggeeProcessId(accessor));
+            if (pid == 0)
+                return McpToolResult.Error("No debugged process found. Make sure debugging is active.");
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            Dictionary<string, object> matchInfo = null;
+            bool conditionMet = false;
+
+            while (true)
+            {
+                try
+                {
+                    var result = await RunUiaWithTimeoutAsync(() =>
+                    {
+                        var element = FindFirstMatchingInProcess(pid, name, automationId, className, controlType);
+                        if (element == null)
+                            return (Match: (Dictionary<string, object>)null, Met: state == "disappears");
+
+                        bool met;
+                        switch (state)
+                        {
+                            case "appears":
+                                met = true;
+                                break;
+                            case "disappears":
+                                met = false;
+                                break;
+                            case "enabled":
+                                met = element.Current.IsEnabled;
+                                break;
+                            case "focused":
+                                try { met = element.Current.HasKeyboardFocus; }
+                                catch { met = false; }
+                                break;
+                            default:
+                                met = false;
+                                break;
+                        }
+
+                        return (Match: BuildElementInfo(element), Met: met);
+                    });
+
+                    matchInfo = result.Match;
+                    conditionMet = result.Met;
+                }
+                catch (TimeoutException)
+                {
+                    // Single UIA probe timed out; keep polling until the overall timeout.
+                }
+
+                if (conditionMet)
+                    break;
+                if (stopwatch.ElapsedMilliseconds >= timeoutMs)
+                    break;
+
+                await Task.Delay(pollIntervalMs);
+            }
+
+            stopwatch.Stop();
+            return McpToolResult.Success(new
+            {
+                found = conditionMet,
+                state,
+                elapsedMs = stopwatch.ElapsedMilliseconds,
+                element = matchInfo,
+            });
+        }
+
+        private static async Task<McpToolResult> UiWaitIdleAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var quietMs = args.Value<int?>("quietMs") ?? 500;
+            var timeoutMs = args.Value<int?>("timeoutMs") ?? 5000;
+            var pollIntervalMs = args.Value<int?>("pollIntervalMs") ?? 150;
+
+            if (quietMs < 50) quietMs = 50;
+            if (pollIntervalMs < 50) pollIntervalMs = 50;
+            if (timeoutMs < quietMs) timeoutMs = quietMs;
+
+            var pid = await accessor.RunOnUIThreadAsync(() => GetDebuggeeProcessId(accessor));
+            if (pid == 0)
+                return McpToolResult.Error("No debugged process found. Make sure debugging is active.");
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            int lastCount = -1;
+            long lastChangeMs = 0;
+            bool idle = false;
+
+            while (true)
+            {
+                int count;
+                try
+                {
+                    count = await RunUiaWithTimeoutAsync(() => CountElementsInProcess(pid));
+                }
+                catch (TimeoutException)
+                {
+                    count = lastCount; // treat as unchanged
+                }
+
+                if (count != lastCount)
+                {
+                    lastCount = count;
+                    lastChangeMs = stopwatch.ElapsedMilliseconds;
+                }
+                else if (lastCount >= 0 && stopwatch.ElapsedMilliseconds - lastChangeMs >= quietMs)
+                {
+                    idle = true;
+                    break;
+                }
+
+                if (stopwatch.ElapsedMilliseconds >= timeoutMs)
+                    break;
+
+                await Task.Delay(pollIntervalMs);
+            }
+
+            stopwatch.Stop();
+            return McpToolResult.Success(new
+            {
+                idle,
+                elapsedMs = stopwatch.ElapsedMilliseconds,
+                finalElementCount = lastCount,
+            });
+        }
+
+        private static AutomationElement FindFirstMatchingInProcess(int pid,
+            string name, string automationId, string className, ControlType controlType)
+        {
+            var conditions = new List<Condition>
+            {
+                new PropertyCondition(AutomationElement.ProcessIdProperty, pid),
+            };
+            if (!string.IsNullOrEmpty(name))
+                conditions.Add(new PropertyCondition(AutomationElement.NameProperty, name));
+            if (!string.IsNullOrEmpty(automationId))
+                conditions.Add(new PropertyCondition(AutomationElement.AutomationIdProperty, automationId));
+            if (!string.IsNullOrEmpty(className))
+                conditions.Add(new PropertyCondition(AutomationElement.ClassNameProperty, className));
+            if (controlType != null)
+                conditions.Add(new PropertyCondition(AutomationElement.ControlTypeProperty, controlType));
+
+            Condition combined = conditions.Count == 1
+                ? conditions[0]
+                : new AndCondition(conditions.ToArray());
+
+            return AutomationElement.RootElement.FindFirst(TreeScope.Descendants, combined);
+        }
+
+        private static int CountElementsInProcess(int pid)
+        {
+            var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, pid);
+            var root = AutomationElement.RootElement.FindFirst(TreeScope.Children, pidCondition);
+            if (root == null)
+                return 0;
+
+            int count = 0;
+            CountWalk(root, ref count);
+            return count;
+        }
+
+        private static void CountWalk(AutomationElement element, ref int count)
+        {
+            if (element == null) return;
+            count++;
+            if (count > 5000) return; // safety cap for idle polling
+            try
+            {
+                var child = TreeWalker.ControlViewWalker.GetFirstChild(element);
+                while (child != null && count <= 5000)
+                {
+                    CountWalk(child, ref count);
+                    child = TreeWalker.ControlViewWalker.GetNextSibling(child);
+                }
+            }
+            catch { }
         }
 
         private static async Task<McpToolResult> UiFindElementsAsync(VsServiceAccessor accessor, JObject args)

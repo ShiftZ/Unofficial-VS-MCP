@@ -167,6 +167,8 @@ VS MCP Server exposes **111 tools** across the following categories:
 | `ui_set_value` | Set the value of a UI element using ValuePattern |
 | `ui_invoke` | Invoke the default action on a UI element using InvokePattern |
 | `ui_send_keys` | Send keyboard input (shortcuts like `ctrl+f`, text typing) to the debugged application |
+| `ui_wait_for_element` | Wait until a UI element reaches a given state (`appears`/`disappears`/`enabled`/`focused`) with a timeout |
+| `ui_wait_idle` | Wait until the UI Automation tree stops changing for a quiet period (useful after triggering async UI updates) |
 
 #### Watch
 

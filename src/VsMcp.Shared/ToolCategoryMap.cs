@@ -99,6 +99,8 @@ namespace VsMcp.Shared
             { "ui_snapshot", "UI" },
             { "ui_get_tree", "UI" },
             { "ui_find_elements", "UI" },
+            { "ui_wait_for_element", "UI" },
+            { "ui_wait_idle", "UI" },
             { "ui_get_element", "UI" },
             { "ui_click", "UI" },
             { "ui_double_click", "UI" },
