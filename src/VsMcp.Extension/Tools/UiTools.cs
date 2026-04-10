@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Automation;
@@ -228,12 +230,21 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_find_elements",
-                    "Find UI elements matching specified criteria in the debugged application",
+                    "Find UI elements matching specified criteria in the debugged application. " +
+                    "String fields (name, automationId, className) support match modes: 'exact' (default), " +
+                    "'contains' (case-insensitive substring), and 'regex' (case-insensitive). " +
+                    "Use 'hasPattern' to require supported UIA patterns (invoke, toggle, select, setvalue, expand). " +
+                    "Use 'ancestorAutomationId' to scope the search to the descendants of a specific element.",
                     SchemaBuilder.Create()
                         .AddString("name", "Name of the UI element to find")
+                        .AddString("nameMatch", "Match mode for 'name': 'exact' (default), 'contains', 'regex'")
                         .AddString("automationId", "AutomationId of the UI element to find")
+                        .AddString("automationIdMatch", "Match mode for 'automationId': 'exact' (default), 'contains', 'regex'")
                         .AddString("className", "ClassName of the UI element to find")
+                        .AddString("classNameMatch", "Match mode for 'className': 'exact' (default), 'contains', 'regex'")
                         .AddString("controlType", "ControlType programmatic name (e.g. 'ControlType.Button')")
+                        .AddString("hasPattern", "Comma-separated list of required UIA patterns: invoke, toggle, select, setvalue, expand")
+                        .AddString("ancestorAutomationId", "Limit the search to descendants of the element with this AutomationId")
                         .AddInteger("maxResults", "Maximum number of elements to return (default: 50)")
                         .Build()),
                 args => UiFindElementsAsync(accessor, args));
@@ -1027,15 +1038,21 @@ namespace VsMcp.Extension.Tools
             var automationId = args.Value<string>("automationId");
             var className = args.Value<string>("className");
             var controlType = args.Value<string>("controlType");
+            var nameMatchStr = args.Value<string>("nameMatch");
+            var automationIdMatchStr = args.Value<string>("automationIdMatch");
+            var classNameMatchStr = args.Value<string>("classNameMatch");
+            var hasPatternStr = args.Value<string>("hasPattern");
+            var ancestorAutomationId = args.Value<string>("ancestorAutomationId");
             var maxResults = args.Value<int?>("maxResults") ?? 50;
 
             if (maxResults < 1) maxResults = 1;
             if (maxResults > 1000) maxResults = 1000;
 
             if (string.IsNullOrEmpty(name) && string.IsNullOrEmpty(automationId)
-                && string.IsNullOrEmpty(className) && string.IsNullOrEmpty(controlType))
+                && string.IsNullOrEmpty(className) && string.IsNullOrEmpty(controlType)
+                && string.IsNullOrEmpty(hasPatternStr))
             {
-                return McpToolResult.Error("At least one search criterion must be provided (name, automationId, className, or controlType)");
+                return McpToolResult.Error("At least one search criterion must be provided (name, automationId, className, controlType, or hasPattern)");
             }
 
             McpServer.McpRequestRouter.Log("[FindElements] getting PID via RunOnUIThreadAsync...");
@@ -1053,6 +1070,44 @@ namespace VsMcp.Extension.Tools
                     return McpToolResult.Error($"Unknown ControlType: '{controlType}'");
             }
 
+            var criteria = new FindCriteria
+            {
+                Name = name,
+                NameMode = string.IsNullOrEmpty(name) ? StringMatchMode.Any : ParseMatchMode(nameMatchStr, StringMatchMode.Exact),
+                AutomationId = automationId,
+                AutomationIdMode = string.IsNullOrEmpty(automationId) ? StringMatchMode.Any : ParseMatchMode(automationIdMatchStr, StringMatchMode.Exact),
+                ClassName = className,
+                ClassNameMode = string.IsNullOrEmpty(className) ? StringMatchMode.Any : ParseMatchMode(classNameMatchStr, StringMatchMode.Exact),
+                ControlType = ct,
+            };
+
+            try
+            {
+                if (criteria.NameMode == StringMatchMode.Regex)
+                    criteria.NameRegex = new Regex(name, RegexOptions.IgnoreCase);
+                if (criteria.AutomationIdMode == StringMatchMode.Regex)
+                    criteria.AutomationIdRegex = new Regex(automationId, RegexOptions.IgnoreCase);
+                if (criteria.ClassNameMode == StringMatchMode.Regex)
+                    criteria.ClassNameRegex = new Regex(className, RegexOptions.IgnoreCase);
+            }
+            catch (ArgumentException ex)
+            {
+                return McpToolResult.Error($"Invalid regex: {ex.Message}");
+            }
+
+            if (!string.IsNullOrEmpty(hasPatternStr))
+            {
+                criteria.RequiredPatterns = new HashSet<string>(
+                    hasPatternStr.Split(new[] { ',', ' ', ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                 .Select(s => s.Trim().ToLowerInvariant()),
+                    StringComparer.OrdinalIgnoreCase);
+                foreach (var p in criteria.RequiredPatterns)
+                {
+                    if (p != "invoke" && p != "toggle" && p != "select" && p != "setvalue" && p != "value" && p != "expand")
+                        return McpToolResult.Error($"Unknown pattern: '{p}'. Expected: invoke, toggle, select, setvalue, expand");
+                }
+            }
+
             var results = new List<Dictionary<string, object>>();
             var resultsLock = new object();
             var cts = new CancellationTokenSource();
@@ -1060,13 +1115,32 @@ namespace VsMcp.Extension.Tools
             McpServer.McpRequestRouter.Log("[FindElements] starting STA search thread...");
             var searchTask = RunOnBackgroundSTAAsync(() =>
             {
-                McpServer.McpRequestRouter.Log("[FindElements STA] FindAll(TreeScope.Children) starting...");
-                // Find top-level windows for the target process
-                var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, pid);
-                var windows = AutomationElement.RootElement.FindAll(TreeScope.Children, pidCondition);
-                McpServer.McpRequestRouter.Log($"[FindElements STA] FindAll done, {windows.Count} windows found");
+                IEnumerable<AutomationElement> roots;
+                if (!string.IsNullOrEmpty(ancestorAutomationId))
+                {
+                    var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, pid);
+                    var ancestorCondition = new AndCondition(
+                        pidCondition,
+                        new PropertyCondition(AutomationElement.AutomationIdProperty, ancestorAutomationId));
+                    var ancestor = AutomationElement.RootElement.FindFirst(TreeScope.Descendants, ancestorCondition);
+                    if (ancestor == null)
+                    {
+                        McpServer.McpRequestRouter.Log($"[FindElements STA] ancestorAutomationId '{ancestorAutomationId}' not found");
+                        return false;
+                    }
+                    roots = new[] { ancestor };
+                }
+                else
+                {
+                    var pidCondition = new PropertyCondition(AutomationElement.ProcessIdProperty, pid);
+                    var windows = AutomationElement.RootElement.FindAll(TreeScope.Children, pidCondition);
+                    McpServer.McpRequestRouter.Log($"[FindElements STA] FindAll done, {windows.Count} windows found");
+                    var list = new List<AutomationElement>();
+                    foreach (AutomationElement w in windows) list.Add(w);
+                    roots = list;
+                }
 
-                foreach (AutomationElement window in windows)
+                foreach (var root in roots)
                 {
                     if (cts.Token.IsCancellationRequested)
                         break;
@@ -1077,13 +1151,8 @@ namespace VsMcp.Extension.Tools
                             break;
                     }
 
-                    McpServer.McpRequestRouter.Log("[FindElements STA] walking window tree...");
-                    WalkAndFindElements(window,
-                        string.IsNullOrEmpty(name) ? null : name,
-                        string.IsNullOrEmpty(automationId) ? null : automationId,
-                        string.IsNullOrEmpty(className) ? null : className,
-                        ct,
-                        maxResults, results, resultsLock, cts.Token);
+                    McpServer.McpRequestRouter.Log("[FindElements STA] walking root tree...");
+                    WalkAndFindElements(root, criteria, maxResults, results, resultsLock, cts.Token);
                     McpServer.McpRequestRouter.Log($"[FindElements STA] walk done, {results.Count} results so far");
                 }
 
@@ -2110,19 +2179,97 @@ namespace VsMcp.Extension.Tools
             return dot >= 0 ? name.Substring(dot + 1) : name;
         }
 
-        private static bool MatchesCriteria(AutomationElement element,
-            string name, string automationId, string className, ControlType controlType)
+        private enum StringMatchMode { Any, Exact, Contains, Regex }
+
+        private sealed class FindCriteria
+        {
+            public string Name;
+            public StringMatchMode NameMode;
+            public Regex NameRegex;
+
+            public string AutomationId;
+            public StringMatchMode AutomationIdMode;
+            public Regex AutomationIdRegex;
+
+            public string ClassName;
+            public StringMatchMode ClassNameMode;
+            public Regex ClassNameRegex;
+
+            public ControlType ControlType;
+            public HashSet<string> RequiredPatterns;
+        }
+
+        private static StringMatchMode ParseMatchMode(string s, StringMatchMode fallback)
+        {
+            if (string.IsNullOrEmpty(s)) return fallback;
+            switch (s.ToLowerInvariant())
+            {
+                case "exact": return StringMatchMode.Exact;
+                case "contains": return StringMatchMode.Contains;
+                case "regex": return StringMatchMode.Regex;
+                default: return fallback;
+            }
+        }
+
+        private static bool MatchString(string actual, string target, StringMatchMode mode, Regex regex)
+        {
+            if (mode == StringMatchMode.Any) return true;
+            if (actual == null) actual = string.Empty;
+            switch (mode)
+            {
+                case StringMatchMode.Exact:
+                    return actual == (target ?? string.Empty);
+                case StringMatchMode.Contains:
+                    return actual.IndexOf(target ?? string.Empty, StringComparison.OrdinalIgnoreCase) >= 0;
+                case StringMatchMode.Regex:
+                    return regex != null && regex.IsMatch(actual);
+                default:
+                    return true;
+            }
+        }
+
+        private static bool HasPatternByName(AutomationElement element, string patternName)
         {
             try
             {
-                if (name != null && element.Current.Name != name)
+                object obj;
+                switch (patternName)
+                {
+                    case "invoke": return element.TryGetCurrentPattern(InvokePattern.Pattern, out obj);
+                    case "toggle": return element.TryGetCurrentPattern(TogglePattern.Pattern, out obj);
+                    case "select": return element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out obj);
+                    case "value":
+                    case "setvalue": return element.TryGetCurrentPattern(ValuePattern.Pattern, out obj);
+                    case "expand": return element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out obj);
+                    default: return false;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool MatchesCriteria(AutomationElement element, FindCriteria c)
+        {
+            try
+            {
+                if (!MatchString(element.Current.Name, c.Name, c.NameMode, c.NameRegex))
                     return false;
-                if (automationId != null && element.Current.AutomationId != automationId)
+                if (!MatchString(element.Current.AutomationId, c.AutomationId, c.AutomationIdMode, c.AutomationIdRegex))
                     return false;
-                if (className != null && element.Current.ClassName != className)
+                if (!MatchString(element.Current.ClassName, c.ClassName, c.ClassNameMode, c.ClassNameRegex))
                     return false;
-                if (controlType != null && !Equals(element.Current.ControlType, controlType))
+                if (c.ControlType != null && !Equals(element.Current.ControlType, c.ControlType))
                     return false;
+                if (c.RequiredPatterns != null && c.RequiredPatterns.Count > 0)
+                {
+                    foreach (var p in c.RequiredPatterns)
+                    {
+                        if (!HasPatternByName(element, p))
+                            return false;
+                    }
+                }
                 return true;
             }
             catch
@@ -2133,14 +2280,14 @@ namespace VsMcp.Extension.Tools
 
         private static void WalkAndFindElements(
             AutomationElement element,
-            string name, string automationId, string className, ControlType controlType,
+            FindCriteria criteria,
             int maxResults, List<Dictionary<string, object>> results, object resultsLock,
             CancellationToken ct)
         {
             if (ct.IsCancellationRequested)
                 return;
 
-            if (MatchesCriteria(element, name, automationId, className, controlType))
+            if (MatchesCriteria(element, criteria))
             {
                 try
                 {
@@ -2178,8 +2325,7 @@ namespace VsMcp.Extension.Tools
                             return;
                     }
 
-                    WalkAndFindElements(child, name, automationId, className, controlType,
-                        maxResults, results, resultsLock, ct);
+                    WalkAndFindElements(child, criteria, maxResults, results, resultsLock, ct);
 
                     child = TreeWalker.ControlViewWalker.GetNextSibling(child);
                 }

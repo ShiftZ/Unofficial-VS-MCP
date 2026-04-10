@@ -158,7 +158,7 @@ VS MCP Server exposes **111 tools** across the following categories:
 | `ui_capture_region` | Capture a screenshot of a specific region of the debugged application's window |
 | `ui_snapshot` | Capture a compact semantic snapshot (pruned UIA tree + screenshot + focus) in a single call; optimized for LLM-driven UI testing |
 | `ui_get_tree` | Get the UI element tree of the debugged application's main window |
-| `ui_find_elements` | Find UI elements matching specified criteria in the debugged application |
+| `ui_find_elements` | Find UI elements matching specified criteria (supports `exact`/`contains`/`regex` match modes, `hasPattern` filter, and `ancestorAutomationId` scoping) |
 | `ui_get_element` | Get detailed properties of a specific UI element by its AutomationId |
 | `ui_click` | Click a UI element by AutomationId, Name, or screen coordinates |
 | `ui_double_click` | Double-click a UI element by AutomationId, Name, or screen coordinates |
