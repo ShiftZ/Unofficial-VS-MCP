@@ -200,6 +200,22 @@ namespace VsMcp.Extension.Tools
             // UI Automation tools
             registry.Register(
                 new McpToolDefinition(
+                    "ui_snapshot",
+                    "Capture a compact semantic snapshot of the debugged application's main window in a single call. " +
+                    "Returns a pruned UI Automation tree (omits invisible/boring nodes, includes actionable patterns, " +
+                    "state flags, rect, and focused element) plus an optional screenshot. " +
+                    "Optimized for autonomous exploration and LLM-driven UI testing; prefer this over ui_get_tree + ui_capture_window.",
+                    SchemaBuilder.Create()
+                        .AddInteger("depth", "Maximum tree depth (default: 8)")
+                        .AddInteger("maxElements", "Maximum total elements in the tree (default: 300)")
+                        .AddBoolean("includeScreenshot", "Include a screenshot of the window (default: true)")
+                        .AddBoolean("includeOffscreen", "Include elements marked IsOffscreen (default: false)")
+                        .AddString("ancestorAutomationId", "Limit the snapshot to the subtree rooted at this AutomationId")
+                        .Build()),
+                args => UiSnapshotAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
                     "ui_get_tree",
                     "Get the UI element tree of the debugged application's main window",
                     SchemaBuilder.Create()
@@ -625,6 +641,145 @@ namespace VsMcp.Extension.Tools
             {
                 return McpToolResult.Error(ex.Message);
             }
+        }
+
+        private static async Task<McpToolResult> UiSnapshotAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var depth = args.Value<int?>("depth") ?? 8;
+            var maxElements = args.Value<int?>("maxElements") ?? 300;
+            var includeScreenshot = args.Value<bool?>("includeScreenshot") ?? true;
+            var includeOffscreen = args.Value<bool?>("includeOffscreen") ?? false;
+            var ancestorAutomationId = args.Value<string>("ancestorAutomationId");
+
+            var hwnd = await accessor.RunOnUIThreadAsync(() => GetDebuggeeWindowHandle(accessor));
+            if (hwnd == IntPtr.Zero)
+                return McpToolResult.Error("No debugged process found or it has no visible window. Make sure debugging is active.");
+
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            Dictionary<string, object> payload;
+            try
+            {
+                payload = await RunUiaWithTimeoutAsync(() =>
+                {
+                    var root = AutomationElement.FromHandle(hwnd);
+                    var scopeRoot = root;
+
+                    if (!string.IsNullOrEmpty(ancestorAutomationId))
+                    {
+                        var condition = new PropertyCondition(AutomationElement.AutomationIdProperty, ancestorAutomationId);
+                        var found = root.FindFirst(TreeScope.Descendants, condition);
+                        if (found != null)
+                            scopeRoot = found;
+                    }
+
+                    var stats = new CompactTreeStats();
+                    var rootNode = BuildCompactNode(scopeRoot, includeOffscreen, stats, forceKeep: true)
+                        ?? new Dictionary<string, object> { ["role"] = "Window" };
+
+                    var childNodes = new List<object>();
+                    try
+                    {
+                        var child = TreeWalker.ControlViewWalker.GetFirstChild(scopeRoot);
+                        while (child != null && stats.Captured < maxElements)
+                        {
+                            var built = BuildCompactSubtree(child, 1, depth, maxElements, includeOffscreen, stats);
+                            if (built != null && built.Count > 0)
+                                childNodes.AddRange(built);
+                            child = TreeWalker.ControlViewWalker.GetNextSibling(child);
+                        }
+                    }
+                    catch { }
+
+                    if (childNodes.Count > 0)
+                        rootNode["children"] = childNodes;
+
+                    var rect = root.Current.BoundingRectangle;
+                    Dictionary<string, object> focus = null;
+                    try
+                    {
+                        var focused = AutomationElement.FocusedElement;
+                        if (focused != null)
+                        {
+                            focus = new Dictionary<string, object>
+                            {
+                                ["automationId"] = focused.Current.AutomationId,
+                                ["name"] = focused.Current.Name,
+                                ["role"] = ShortRoleName(focused.Current.ControlType),
+                            };
+                        }
+                    }
+                    catch { }
+
+                    return new Dictionary<string, object>
+                    {
+                        ["window"] = new Dictionary<string, object>
+                        {
+                            ["title"] = root.Current.Name,
+                            ["className"] = root.Current.ClassName,
+                            ["bounds"] = rect.IsEmpty
+                                ? null
+                                : (object)new[] { (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height },
+                            ["focused"] = focus,
+                        },
+                        ["tree"] = rootNode,
+                        ["stats"] = new Dictionary<string, object>
+                        {
+                            ["captured"] = stats.Captured,
+                            ["pruned"] = stats.Pruned,
+                            ["offscreenSkipped"] = stats.OffscreenSkipped,
+                            ["truncated"] = stats.Truncated,
+                        },
+                    };
+                });
+            }
+            catch (TimeoutException ex)
+            {
+                return McpToolResult.Error(ex.Message);
+            }
+
+            stopwatch.Stop();
+            if (payload["stats"] is Dictionary<string, object> statsDict)
+                statsDict["elapsedMs"] = stopwatch.ElapsedMilliseconds;
+
+            string imageBase64 = null;
+            string imageMime = null;
+            if (includeScreenshot)
+            {
+                try
+                {
+                    var bitmap = await CaptureWindowBitmapAsync(hwnd);
+                    if (bitmap != null)
+                    {
+                        using (bitmap)
+                        {
+                            var (b64, mime) = BitmapToBase64WithMime(bitmap);
+                            imageBase64 = b64;
+                            imageMime = mime;
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(payload, Newtonsoft.Json.Formatting.Indented);
+            var result = new McpToolResult
+            {
+                Content = new List<McpContent>
+                {
+                    new McpContent { Type = "text", Text = json },
+                },
+            };
+            if (imageBase64 != null)
+            {
+                result.Content.Add(new McpContent
+                {
+                    Type = "image",
+                    Data = imageBase64,
+                    MimeType = imageMime,
+                });
+            }
+            return result;
         }
 
         private static async Task<McpToolResult> UiFindElementsAsync(VsServiceAccessor accessor, JObject args)
@@ -1575,6 +1730,145 @@ namespace VsMcp.Extension.Tools
             }
 
             return info;
+        }
+
+        private sealed class CompactTreeStats
+        {
+            public int Captured;
+            public int Pruned;
+            public int OffscreenSkipped;
+            public bool Truncated;
+        }
+
+        private static List<object> BuildCompactSubtree(AutomationElement element, int depth, int maxDepth,
+            int maxElements, bool includeOffscreen, CompactTreeStats stats)
+        {
+            if (stats.Captured >= maxElements)
+            {
+                stats.Truncated = true;
+                return new List<object>();
+            }
+
+            var node = BuildCompactNode(element, includeOffscreen, stats, forceKeep: false);
+
+            var childNodes = new List<object>();
+            if (depth < maxDepth)
+            {
+                try
+                {
+                    var child = TreeWalker.ControlViewWalker.GetFirstChild(element);
+                    while (child != null && stats.Captured < maxElements)
+                    {
+                        var built = BuildCompactSubtree(child, depth + 1, maxDepth, maxElements, includeOffscreen, stats);
+                        if (built != null && built.Count > 0)
+                            childNodes.AddRange(built);
+                        child = TreeWalker.ControlViewWalker.GetNextSibling(child);
+                    }
+                }
+                catch { }
+            }
+
+            if (node == null)
+            {
+                // Parent pruned — promote children to grandparent.
+                return childNodes;
+            }
+
+            if (childNodes.Count > 0)
+                node["children"] = childNodes;
+            return new List<object> { node };
+        }
+
+        private static Dictionary<string, object> BuildCompactNode(AutomationElement element,
+            bool includeOffscreen, CompactTreeStats stats, bool forceKeep)
+        {
+            try
+            {
+                var current = element.Current;
+
+                if (!forceKeep && !includeOffscreen && current.IsOffscreen)
+                {
+                    stats.OffscreenSkipped++;
+                    return null;
+                }
+
+                var role = ShortRoleName(current.ControlType);
+                var name = current.Name ?? string.Empty;
+                var autoId = current.AutomationId ?? string.Empty;
+
+                var actions = new List<string>();
+                object patternObj;
+                if (element.TryGetCurrentPattern(InvokePattern.Pattern, out patternObj)) actions.Add("invoke");
+                if (element.TryGetCurrentPattern(TogglePattern.Pattern, out patternObj)) actions.Add("toggle");
+                if (element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out patternObj)) actions.Add("select");
+                if (element.TryGetCurrentPattern(ValuePattern.Pattern, out patternObj)) actions.Add("setvalue");
+                if (element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out patternObj)) actions.Add("expand");
+
+                bool boring =
+                    actions.Count == 0 &&
+                    string.IsNullOrEmpty(name) &&
+                    string.IsNullOrEmpty(autoId) &&
+                    (role == "Pane" || role == "Group" || role == "Custom" || role == "Thumb" || role == "ScrollBar" || role == "Separator");
+
+                if (!forceKeep && boring)
+                {
+                    stats.Pruned++;
+                    return null;
+                }
+
+                stats.Captured++;
+
+                var node = new Dictionary<string, object>
+                {
+                    ["role"] = role,
+                };
+                if (!string.IsNullOrEmpty(autoId)) node["id"] = autoId;
+                if (!string.IsNullOrEmpty(name)) node["name"] = name;
+
+                if (element.TryGetCurrentPattern(ValuePattern.Pattern, out var vpObj) && vpObj is ValuePattern vp)
+                {
+                    var val = vp.Current.Value;
+                    if (!string.IsNullOrEmpty(val)) node["value"] = val;
+                }
+
+                var flags = new List<string>();
+                if (!current.IsEnabled) flags.Add("disabled");
+                if (current.IsOffscreen) flags.Add("offscreen");
+                try { if (current.HasKeyboardFocus) flags.Add("focused"); } catch { }
+                if (element.TryGetCurrentPattern(TogglePattern.Pattern, out var tpObj) && tpObj is TogglePattern tp)
+                {
+                    if (tp.Current.ToggleState == ToggleState.On) flags.Add("checked");
+                }
+                if (element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var sipObj) && sipObj is SelectionItemPattern sip)
+                {
+                    if (sip.Current.IsSelected) flags.Add("selected");
+                }
+                if (element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out var ecpObj) && ecpObj is ExpandCollapsePattern ecp)
+                {
+                    if (ecp.Current.ExpandCollapseState == ExpandCollapseState.Expanded) flags.Add("expanded");
+                }
+                if (flags.Count > 0) node["state"] = string.Join(",", flags);
+
+                var rect = current.BoundingRectangle;
+                if (!rect.IsEmpty)
+                    node["rect"] = new[] { (int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height };
+
+                if (actions.Count > 0) node["actions"] = actions;
+
+                return node;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string ShortRoleName(ControlType type)
+        {
+            if (type == null) return "Unknown";
+            var name = type.ProgrammaticName;
+            var dot = name.IndexOf('.');
+            return dot >= 0 ? name.Substring(dot + 1) : name;
         }
 
         private static bool MatchesCriteria(AutomationElement element,
