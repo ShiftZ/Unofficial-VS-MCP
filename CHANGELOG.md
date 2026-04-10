@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.7.0] - 2026-04-10
+
+### Added
+- **`ui_snapshot` tool** — single-call compact semantic snapshot of the debugged application's main window. Returns a pruned UI Automation tree (omitting invisible/boring nodes) together with an optional screenshot and focused-element info. Each node includes its role, id, name, bounding rect, supported action patterns (`invoke`, `toggle`, `select`, `setvalue`, `expand`), and state flags (`disabled`, `offscreen`, `focused`, `checked`, `selected`, `expanded`). Optimized for LLM-driven autonomous UI testing; prefer it over `ui_get_tree` + `ui_capture_window`.
+- **`ui_wait_for_element` tool** — polls the UI Automation tree until an element matching the given criteria reaches a target state (`appears`, `disappears`, `enabled`, `focused`), with configurable timeout and poll interval. Eliminates the need to sleep after triggering UI actions.
+- **`ui_wait_idle` tool** — waits until the element count under the debuggee stops changing for a configurable quiet period, with a timeout. Useful after actions that cause asynchronous UI updates (loading, layout, progressive rendering).
+- **`vs-ui-explore` Claude Code skill** — bundled with the extension and automatically deployed to `%USERPROFILE%\.claude\skills\` on startup via a new `VsMcpPackage.DeploySkills()` step. Drives Claude Code through an autonomous UI crawl of a debuggee using `ui_snapshot`, `ui_find_elements`, and the `ui_wait_*` primitives and produces a structured bug/coverage report with hard stops for destructive controls.
+
+### Improved
+- **`ui_find_elements` semantic matching** — `name`, `automationId`, and `className` now accept per-field match modes (`exact` (default), `contains`, `regex`, all case-insensitive). New `hasPattern` filter restricts results to elements that expose specific UIA patterns (`invoke`, `toggle`, `select`, `setvalue`, `expand`). New `ancestorAutomationId` scopes the walk to descendants of a specific element (e.g. a particular dialog) instead of every top-level window of the debuggee.
+- **`ui_find_elements` ancestor lookup robustness** — the ancestor resolution now walks the debuggee's top-level windows directly and uses `FindAll` so that duplicate `AutomationId` values (such as an offscreen placeholder plus the real visible control) no longer cause scoped searches to return zero results.
+
+### Fixed
+- **`get_help` categorization** — the three new UI tools (`ui_snapshot`, `ui_wait_for_element`, `ui_wait_idle`) are now listed under the `UI` category in `get_help` output instead of `Other`, by syncing the `GeneralTools.ToolCategories` mirror with `VsMcp.Shared.ToolCategoryMap`.
+
 ## [0.4.0] - 2026-03-24
 
 ### Added
