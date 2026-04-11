@@ -35,6 +35,44 @@ namespace VsMcp.Extension.Tools
         private static extern bool SetCursorPos(int x, int y);
 
         [DllImport("user32.dll")]
+        private static extern bool GetCursorPos(out POINT lpPoint);
+
+        [DllImport("user32.dll")]
+        private static extern bool BlockInput(bool fBlockIt);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern bool PostMessage(IntPtr hWnd, uint Msg, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr WindowFromPoint(POINT Point);
+
+        [DllImport("user32.dll")]
+        private static extern bool ScreenToClient(IntPtr hWnd, ref POINT lpPoint);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+
+        private const uint WM_MOUSEWHEEL = 0x020A;
+        private const uint WM_MOUSEHWHEEL = 0x020E;
+        private const uint WM_LBUTTONDOWN = 0x0201;
+        private const uint WM_LBUTTONUP = 0x0202;
+        private const uint WM_RBUTTONDOWN = 0x0204;
+        private const uint WM_RBUTTONUP = 0x0205;
+        private const uint WM_LBUTTONDBLCLK = 0x0203;
+        private const ushort MK_LBUTTON = 0x0001;
+        private const ushort MK_RBUTTON = 0x0002;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct POINT
+        {
+            public int X;
+            public int Y;
+        }
+
+        [DllImport("user32.dll")]
         private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
 
         [DllImport("user32.dll")]
@@ -58,6 +96,9 @@ namespace VsMcp.Extension.Tools
         private const uint MOUSEEVENTF_LEFTUP = 0x0004;
         private const uint MOUSEEVENTF_RIGHTDOWN = 0x0008;
         private const uint MOUSEEVENTF_RIGHTUP = 0x0010;
+        private const uint MOUSEEVENTF_WHEEL = 0x0800;
+        private const uint MOUSEEVENTF_HWHEEL = 0x01000;
+        private const int WHEEL_DELTA = 120;
         private const uint PW_RENDERFULLCONTENT = 0x00000002;
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -293,46 +334,58 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_click",
-                    "Click a UI element by AutomationId, Name, or screen coordinates",
+                    "Click a UI element by AutomationId, Name, or screen coordinates. " +
+                    "When an element is given, InvokePattern is tried first (no cursor movement). " +
+                    "For physical clicks (coordinates or pattern-less elements), the cursor is restored " +
+                    "to its previous position by default.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element to click")
                         .AddString("name", "Name of the UI element to click (used if automationId is not provided)")
                         .AddInteger("x", "Screen X coordinate to click (used if automationId and name are not provided)")
                         .AddInteger("y", "Screen Y coordinate to click (used if automationId and name are not provided)")
                         .AddInteger("waitMs", "Milliseconds to wait after clicking (default: 0)")
+                        .AddBoolean("restoreCursor", "Restore cursor to its previous position after physical click (default: true)")
+                        .AddBoolean("blockInput", "Block user input during physical click for full isolation. Requires admin (default: false)")
                         .Build()),
                 args => UiClickAsync(accessor, args));
 
             registry.Register(
                 new McpToolDefinition(
                     "ui_double_click",
-                    "Double-click a UI element by AutomationId, Name, or screen coordinates",
+                    "Double-click a UI element by AutomationId, Name, or screen coordinates. " +
+                    "Always uses physical mouse events; cursor is restored to its previous position by default.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element to double-click")
                         .AddString("name", "Name of the UI element to double-click (used if automationId is not provided)")
                         .AddInteger("x", "Screen X coordinate to double-click (used if automationId and name are not provided)")
                         .AddInteger("y", "Screen Y coordinate to double-click (used if automationId and name are not provided)")
                         .AddInteger("waitMs", "Milliseconds to wait after double-clicking (default: 0)")
+                        .AddBoolean("restoreCursor", "Restore cursor to its previous position after the click (default: true)")
+                        .AddBoolean("blockInput", "Block user input during the click for full isolation. Requires admin (default: false)")
                         .Build()),
                 args => UiDoubleClickAsync(accessor, args));
 
             registry.Register(
                 new McpToolDefinition(
                     "ui_right_click",
-                    "Right-click a UI element by AutomationId, Name, or screen coordinates to open context menus",
+                    "Right-click a UI element by AutomationId, Name, or screen coordinates to open context menus. " +
+                    "Always uses physical mouse events; cursor is restored to its previous position by default.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element to right-click")
                         .AddString("name", "Name of the UI element to right-click (used if automationId is not provided)")
                         .AddInteger("x", "Screen X coordinate to right-click (used if automationId and name are not provided)")
                         .AddInteger("y", "Screen Y coordinate to right-click (used if automationId and name are not provided)")
                         .AddInteger("waitMs", "Milliseconds to wait after right-clicking (default: 0)")
+                        .AddBoolean("restoreCursor", "Restore cursor to its previous position after the click (default: true)")
+                        .AddBoolean("blockInput", "Block user input during the click for full isolation. Requires admin (default: false)")
                         .Build()),
                 args => UiRightClickAsync(accessor, args));
 
             registry.Register(
                 new McpToolDefinition(
                     "ui_drag",
-                    "Perform a drag-and-drop operation from start coordinates to end coordinates",
+                    "Perform a drag-and-drop operation from start coordinates to end coordinates. " +
+                    "Cursor is restored to its previous position after the drag completes by default.",
                     SchemaBuilder.Create()
                         .AddInteger("startX", "Screen X coordinate of the drag start point", required: true)
                         .AddInteger("startY", "Screen Y coordinate of the drag start point", required: true)
@@ -340,8 +393,35 @@ namespace VsMcp.Extension.Tools
                         .AddInteger("endY", "Screen Y coordinate of the drag end point", required: true)
                         .AddInteger("steps", "Number of intermediate move steps (default: 10)")
                         .AddInteger("delayMs", "Milliseconds to wait between each step (default: 10)")
+                        .AddBoolean("restoreCursor", "Restore cursor to its previous position after the drag (default: true)")
+                        .AddBoolean("blockInput", "Block user input during the drag for full isolation. Requires admin (default: false)")
                         .Build()),
                 args => UiDragAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
+                    "ui_mouse_wheel",
+                    "Scroll the mouse wheel over a UI element or screen coordinates. " +
+                    "Specify the position by AutomationId, Name, or x/y coordinates. " +
+                    "Use 'clicks' to control the amount and direction: positive scrolls up (away from user), " +
+                    "negative scrolls down (toward user). One click equals one wheel notch (WHEEL_DELTA=120). " +
+                    "Set 'horizontal' to true for horizontal wheel scrolling. " +
+                    "By default, when an element is given, ScrollPattern is used (no cursor movement, " +
+                    "user's mouse is not disturbed). Falls back to physical wheel events otherwise. " +
+                    "When physical events are used, the cursor is restored to its previous position.",
+                    SchemaBuilder.Create()
+                        .AddString("automationId", "AutomationId of the UI element to scroll over")
+                        .AddString("name", "Name of the UI element to scroll over (used if automationId is not provided)")
+                        .AddInteger("x", "Screen X coordinate to scroll at (used if automationId and name are not provided)")
+                        .AddInteger("y", "Screen Y coordinate to scroll at (used if automationId and name are not provided)")
+                        .AddInteger("clicks", "Number of wheel notches to scroll. Positive = up/left, negative = down/right (default: -3)")
+                        .AddBoolean("horizontal", "Send a horizontal wheel event instead of vertical (default: false)")
+                        .AddBoolean("usePattern", "Try ScrollPattern first when an element is given (default: true)")
+                        .AddBoolean("restoreCursor", "Restore cursor to its previous position after physical wheel events (default: true)")
+                        .AddBoolean("blockInput", "Block user input during the operation for full isolation. Requires admin (default: false)")
+                        .AddInteger("waitMs", "Milliseconds to wait after scrolling (default: 0)")
+                        .Build()),
+                args => UiMouseWheelAsync(accessor, args));
 
             registry.Register(
                 new McpToolDefinition(
@@ -1294,6 +1374,8 @@ namespace VsMcp.Extension.Tools
             var x = args.Value<int?>("x");
             var y = args.Value<int?>("y");
             var waitMs = args.Value<int?>("waitMs") ?? 0;
+            var restoreCursor = args.Value<bool?>("restoreCursor") ?? true;
+            var blockInput = args.Value<bool?>("blockInput") ?? false;
 
             if (string.IsNullOrEmpty(automationId) && string.IsNullOrEmpty(name) && (!x.HasValue || !y.HasValue))
                 return McpToolResult.Error("Either 'automationId', 'name', or both 'x' and 'y' coordinates are required");
@@ -1303,12 +1385,12 @@ namespace VsMcp.Extension.Tools
             if (!string.IsNullOrEmpty(automationId))
             {
                 var condition = new PropertyCondition(AutomationElement.AutomationIdProperty, automationId);
-                result = await ClickByConditionAsync(accessor, condition, $"AutomationId '{automationId}'", automationId);
+                result = await ClickByConditionAsync(accessor, condition, $"AutomationId '{automationId}'", automationId, restoreCursor, blockInput);
             }
             else if (!string.IsNullOrEmpty(name))
             {
                 var condition = new PropertyCondition(AutomationElement.NameProperty, name);
-                result = await ClickByConditionAsync(accessor, condition, $"Name '{name}'", name);
+                result = await ClickByConditionAsync(accessor, condition, $"Name '{name}'", name, restoreCursor, blockInput);
             }
             else
             {
@@ -1327,7 +1409,7 @@ namespace VsMcp.Extension.Tools
                         System.Threading.Thread.Sleep(100);
                     }
 
-                    PerformClick(x.Value, y.Value);
+                    WithBlockedInput(blockInput, () => PerformClick(x.Value, y.Value, restoreCursor));
                 });
 
                 result = McpToolResult.Success(new
@@ -1345,7 +1427,8 @@ namespace VsMcp.Extension.Tools
         }
 
         private static async Task<McpToolResult> ClickByConditionAsync(
-            VsServiceAccessor accessor, Condition condition, string description, string identifier)
+            VsServiceAccessor accessor, Condition condition, string description, string identifier,
+            bool restoreCursor, bool blockInput)
         {
             var pid = await accessor.RunOnUIThreadAsync(() => GetDebuggeeProcessId(accessor));
             if (pid == 0)
@@ -1385,7 +1468,7 @@ namespace VsMcp.Extension.Tools
                         if (boundsError != null)
                             return McpToolResult.Error(boundsError);
 
-                        PerformClick(clickX, clickY);
+                        WithBlockedInput(blockInput, () => PerformClick(clickX, clickY, restoreCursor));
                         return McpToolResult.Success(new
                         {
                             message = $"Clicked element with {description} at ({clickX}, {clickY})",
@@ -1494,6 +1577,8 @@ namespace VsMcp.Extension.Tools
             var x = args.Value<int?>("x");
             var y = args.Value<int?>("y");
             var waitMs = args.Value<int?>("waitMs") ?? 0;
+            var restoreCursor = args.Value<bool?>("restoreCursor") ?? true;
+            var blockInput = args.Value<bool?>("blockInput") ?? false;
 
             if (string.IsNullOrEmpty(automationId) && string.IsNullOrEmpty(name) && (!x.HasValue || !y.HasValue))
                 return McpToolResult.Error("Either 'automationId', 'name', or both 'x' and 'y' coordinates are required");
@@ -1540,7 +1625,7 @@ namespace VsMcp.Extension.Tools
                     System.Threading.Thread.Sleep(100);
                 }
 
-                PerformDoubleClick(clickX, clickY);
+                WithBlockedInput(blockInput, () => PerformDoubleClick(clickX, clickY, restoreCursor));
             });
 
             var result = McpToolResult.Success(new
@@ -1563,6 +1648,8 @@ namespace VsMcp.Extension.Tools
             var x = args.Value<int?>("x");
             var y = args.Value<int?>("y");
             var waitMs = args.Value<int?>("waitMs") ?? 0;
+            var restoreCursor = args.Value<bool?>("restoreCursor") ?? true;
+            var blockInput = args.Value<bool?>("blockInput") ?? false;
 
             if (string.IsNullOrEmpty(automationId) && string.IsNullOrEmpty(name) && (!x.HasValue || !y.HasValue))
                 return McpToolResult.Error("Either 'automationId', 'name', or both 'x' and 'y' coordinates are required");
@@ -1609,7 +1696,7 @@ namespace VsMcp.Extension.Tools
                     System.Threading.Thread.Sleep(100);
                 }
 
-                PerformRightClick(clickX, clickY);
+                WithBlockedInput(blockInput, () => PerformRightClick(clickX, clickY, restoreCursor));
             });
 
             var result = McpToolResult.Success(new
@@ -1633,6 +1720,8 @@ namespace VsMcp.Extension.Tools
             var endY = args.Value<int>("endY");
             var steps = args.Value<int?>("steps") ?? 10;
             var delayMs = args.Value<int?>("delayMs") ?? 10;
+            var restoreCursor = args.Value<bool?>("restoreCursor") ?? true;
+            var blockInput = args.Value<bool?>("blockInput") ?? false;
 
             if (steps < 1) steps = 1;
             if (steps > 100) steps = 100;
@@ -1658,7 +1747,7 @@ namespace VsMcp.Extension.Tools
                     System.Threading.Thread.Sleep(100);
                 }
 
-                PerformDrag(startX, startY, endX, endY, steps, delayMs);
+                WithBlockedInput(blockInput, () => PerformDrag(startX, startY, endX, endY, steps, delayMs, restoreCursor));
             });
 
             return McpToolResult.Success(new
@@ -1670,6 +1759,171 @@ namespace VsMcp.Extension.Tools
                 endY,
                 steps,
                 delayMs
+            });
+        }
+
+        private static async Task<McpToolResult> UiMouseWheelAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var automationId = args.Value<string>("automationId");
+            var name = args.Value<string>("name");
+            var x = args.Value<int?>("x");
+            var y = args.Value<int?>("y");
+            var clicks = args.Value<int?>("clicks") ?? -3;
+            var horizontal = args.Value<bool?>("horizontal") ?? false;
+            var usePattern = args.Value<bool?>("usePattern") ?? true;
+            var restoreCursor = args.Value<bool?>("restoreCursor") ?? true;
+            var blockInput = args.Value<bool?>("blockInput") ?? false;
+            var waitMs = args.Value<int?>("waitMs") ?? 0;
+
+            if (clicks == 0)
+                return McpToolResult.Error("Parameter 'clicks' must be non-zero");
+
+            bool hasElementArg = !string.IsNullOrEmpty(automationId) || !string.IsNullOrEmpty(name);
+            string positionDescription = null;
+
+            // Try ScrollPattern first when an element is provided.
+            if (hasElementArg && usePattern)
+            {
+                var pid = await accessor.RunOnUIThreadAsync(() => GetDebuggeeProcessId(accessor));
+                if (pid == 0)
+                    return McpToolResult.Error("No debugged process found. Make sure debugging is active.");
+
+                var patternResult = await RunUiaWithTimeoutAsync(() =>
+                {
+                    Condition condition = !string.IsNullOrEmpty(automationId)
+                        ? (Condition)new PropertyCondition(AutomationElement.AutomationIdProperty, automationId)
+                        : new PropertyCondition(AutomationElement.NameProperty, name);
+                    var element = FindFirstInProcess(pid, condition);
+                    if (element == null)
+                        return (found: false, scrolled: false);
+
+                    bool scrolled = TryScrollWithPattern(element, clicks, horizontal);
+                    return (found: true, scrolled: scrolled);
+                });
+
+                if (!patternResult.found)
+                {
+                    var idDesc = !string.IsNullOrEmpty(automationId)
+                        ? $"AutomationId '{automationId}'"
+                        : $"Name '{name}'";
+                    return McpToolResult.Error($"Element with {idDesc} not found");
+                }
+
+                if (patternResult.scrolled)
+                {
+                    if (waitMs > 0)
+                        await Task.Delay(Math.Min(waitMs, 10000));
+
+                    var axis = horizontal ? "horizontal" : "vertical";
+                    var idStr = !string.IsNullOrEmpty(automationId) ? automationId : name;
+                    return McpToolResult.Success(new
+                    {
+                        message = $"Scrolled {axis} {clicks} click(s) on '{idStr}' via ScrollPattern (cursor not moved)",
+                        method = "ScrollPattern",
+                        clicks,
+                        horizontal
+                    });
+                }
+                // Pattern not supported -> fall through to physical wheel events.
+            }
+
+            int targetX;
+            int targetY;
+
+            if (hasElementArg)
+            {
+                var coords = await ResolveElementCoordinatesAsync(accessor, automationId, name);
+                if (coords == null)
+                {
+                    var idDesc = !string.IsNullOrEmpty(automationId)
+                        ? $"AutomationId '{automationId}'"
+                        : $"Name '{name}'";
+                    return McpToolResult.Error($"Element with {idDesc} not found or has no bounding rectangle");
+                }
+                targetX = coords.Value.x;
+                targetY = coords.Value.y;
+                positionDescription = !string.IsNullOrEmpty(automationId)
+                    ? $"element '{automationId}'"
+                    : $"element '{name}'";
+            }
+            else if (x.HasValue && y.HasValue)
+            {
+                targetX = x.Value;
+                targetY = y.Value;
+                positionDescription = $"({targetX}, {targetY})";
+            }
+            else
+            {
+                return McpToolResult.Error("Either 'automationId', 'name', or both 'x' and 'y' coordinates are required");
+            }
+
+            var hwnd = await accessor.RunOnUIThreadAsync(() => GetDebuggeeWindowHandle(accessor));
+            var debuggeePid = await accessor.RunOnUIThreadAsync(() => GetDebuggeeProcessId(accessor));
+
+            var boundsError = await Task.Run(() => ValidateCoordinatesInWindow(hwnd, targetX, targetY));
+            if (boundsError != null)
+                return McpToolResult.Error(boundsError);
+
+            // Try PostMessage WM_MOUSEWHEEL first — this delivers the wheel without ever moving the cursor.
+            // WPF reads the position from lParam, so this works for WPF-based debuggees.
+            var posted = await Task.Run(() =>
+            {
+                var targetHwnd = WithDpiAwareness(() => FindHwndAtPoint(targetX, targetY, debuggeePid));
+                if (targetHwnd == IntPtr.Zero)
+                    return false;
+                int total = 0;
+                int step = clicks > 0 ? 1 : -1;
+                int abs = Math.Abs(clicks);
+                for (int i = 0; i < abs; i++)
+                {
+                    if (!TryPostWheelMessage(targetHwnd, targetX, targetY, step, horizontal))
+                        return total > 0;
+                    total++;
+                }
+                return total == abs;
+            });
+
+            if (posted)
+            {
+                if (waitMs > 0)
+                    await Task.Delay(Math.Min(waitMs, 10000));
+
+                var axisP = horizontal ? "horizontal" : "vertical";
+                return McpToolResult.Success(new
+                {
+                    message = $"Scrolled {axisP} wheel {clicks} click(s) over {positionDescription} via PostMessage (cursor not moved)",
+                    method = "PostMessageWheel",
+                    x = targetX,
+                    y = targetY,
+                    clicks,
+                    horizontal
+                });
+            }
+
+            await Task.Run(() =>
+            {
+                if (hwnd != IntPtr.Zero)
+                {
+                    SetForegroundWindow(hwnd);
+                    System.Threading.Thread.Sleep(100);
+                }
+
+                WithBlockedInput(blockInput, () => PerformWheel(targetX, targetY, clicks, horizontal, restoreCursor));
+            });
+
+            if (waitMs > 0)
+                await Task.Delay(Math.Min(waitMs, 10000));
+
+            var axisName = horizontal ? "horizontal" : "vertical";
+            return McpToolResult.Success(new
+            {
+                message = $"Scrolled {axisName} wheel {clicks} click(s) over {positionDescription} (physical events)",
+                method = "PhysicalWheel",
+                x = targetX,
+                y = targetY,
+                clicks,
+                horizontal,
+                cursorRestored = restoreCursor
             });
         }
 
@@ -1915,41 +2169,130 @@ namespace VsMcp.Extension.Tools
             });
         }
 
-        private static void PerformClick(int x, int y)
+        private static void WithBlockedInput(bool block, Action action)
         {
-            WithDpiAwareness(() =>
+            if (!block)
+            {
+                action();
+                return;
+            }
+
+            bool blocked = BlockInput(true);
+            try
+            {
+                action();
+            }
+            finally
+            {
+                if (blocked)
+                    BlockInput(false);
+            }
+        }
+
+        private static void WithCursorRestore(bool restore, Action action)
+        {
+            if (!restore)
+            {
+                action();
+                return;
+            }
+
+            POINT saved;
+            bool gotPos = GetCursorPos(out saved);
+            try
+            {
+                action();
+            }
+            finally
+            {
+                if (gotPos)
+                    WithDpiAwareness(() => SetCursorPos(saved.X, saved.Y));
+            }
+        }
+
+        private static void PerformClick(int x, int y, bool restoreCursor = false)
+        {
+            WithCursorRestore(restoreCursor, () => WithDpiAwareness(() =>
             {
                 SetCursorPos(x, y);
                 mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
-            });
+            }));
         }
 
-        private static void PerformDoubleClick(int x, int y)
+        private static void PerformDoubleClick(int x, int y, bool restoreCursor = false)
         {
-            WithDpiAwareness(() =>
+            WithCursorRestore(restoreCursor, () => WithDpiAwareness(() =>
             {
                 SetCursorPos(x, y);
                 mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
-            });
+            }));
         }
 
-        private static void PerformRightClick(int x, int y)
+        private static void PerformRightClick(int x, int y, bool restoreCursor = false)
         {
-            WithDpiAwareness(() =>
+            WithCursorRestore(restoreCursor, () => WithDpiAwareness(() =>
             {
                 SetCursorPos(x, y);
                 mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, UIntPtr.Zero);
                 mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, UIntPtr.Zero);
-            });
+            }));
         }
 
-        private static void PerformDrag(int startX, int startY, int endX, int endY, int steps, int delayMs)
+        private static IntPtr FindHwndAtPoint(int x, int y, int debuggeePid)
         {
-            WithDpiAwareness(() =>
+            var pt = new POINT { X = x, Y = y };
+            var hwnd = WindowFromPoint(pt);
+            if (hwnd == IntPtr.Zero)
+                return IntPtr.Zero;
+            // Make sure the window belongs to the debuggee process; otherwise we'd post messages
+            // into the user's other apps. Walk to the top-level if needed.
+            GetWindowThreadProcessId(hwnd, out uint pid);
+            if (debuggeePid > 0 && pid != (uint)debuggeePid)
+                return IntPtr.Zero;
+            return hwnd;
+        }
+
+        private static IntPtr MakeLParam(int low, int high)
+        {
+            return (IntPtr)((high << 16) | (low & 0xFFFF));
+        }
+
+        private static IntPtr MakeWheelWParam(int delta, ushort keyState)
+        {
+            return (IntPtr)((delta << 16) | keyState);
+        }
+
+        private static bool TryPostWheelMessage(IntPtr hwnd, int screenX, int screenY, int clicks, bool horizontal)
+        {
+            if (hwnd == IntPtr.Zero)
+                return false;
+            int delta = clicks * WHEEL_DELTA;
+            uint msg = horizontal ? WM_MOUSEHWHEEL : WM_MOUSEWHEEL;
+            // WM_MOUSEWHEEL lParam carries SCREEN coordinates (unlike WM_LBUTTONDOWN which is client).
+            var wParam = MakeWheelWParam(delta, 0);
+            var lParam = MakeLParam(screenX, screenY);
+            return PostMessage(hwnd, msg, wParam, lParam);
+        }
+
+        private static void PerformWheel(int x, int y, int clicks, bool horizontal, bool restoreCursor = false)
+        {
+            WithCursorRestore(restoreCursor, () => WithDpiAwareness(() =>
+            {
+                SetCursorPos(x, y);
+                System.Threading.Thread.Sleep(20);
+                int delta = clicks * WHEEL_DELTA;
+                uint flags = horizontal ? MOUSEEVENTF_HWHEEL : MOUSEEVENTF_WHEEL;
+                mouse_event(flags, 0, 0, unchecked((uint)delta), UIntPtr.Zero);
+            }));
+        }
+
+        private static void PerformDrag(int startX, int startY, int endX, int endY, int steps, int delayMs, bool restoreCursor = false)
+        {
+            WithCursorRestore(restoreCursor, () => WithDpiAwareness(() =>
             {
                 SetCursorPos(startX, startY);
                 System.Threading.Thread.Sleep(50);
@@ -1965,7 +2308,70 @@ namespace VsMcp.Extension.Tools
                 }
 
                 mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
-            });
+            }));
+        }
+
+        private static AutomationElement FindScrollPatternProvider(AutomationElement element)
+        {
+            var current = element;
+            while (current != null)
+            {
+                if (current.TryGetCurrentPattern(ScrollPattern.Pattern, out _))
+                    return current;
+                try
+                {
+                    current = TreeWalker.ControlViewWalker.GetParent(current);
+                }
+                catch
+                {
+                    return null;
+                }
+            }
+            return null;
+        }
+
+        private static bool TryScrollWithPattern(AutomationElement element, int clicks, bool horizontal)
+        {
+            var provider = FindScrollPatternProvider(element);
+            if (provider == null)
+                return false;
+
+            if (!provider.TryGetCurrentPattern(ScrollPattern.Pattern, out object obj))
+                return false;
+            var scrollPattern = (ScrollPattern)obj;
+
+            // clicks > 0 means "scroll up/left" -> SmallDecrement
+            // clicks < 0 means "scroll down/right" -> SmallIncrement
+            ScrollAmount h = ScrollAmount.NoAmount;
+            ScrollAmount v = ScrollAmount.NoAmount;
+            int count = Math.Abs(clicks);
+
+            if (horizontal)
+            {
+                if (!scrollPattern.Current.HorizontallyScrollable)
+                    return false;
+                h = clicks > 0 ? ScrollAmount.SmallDecrement : ScrollAmount.SmallIncrement;
+            }
+            else
+            {
+                if (!scrollPattern.Current.VerticallyScrollable)
+                    return false;
+                v = clicks > 0 ? ScrollAmount.SmallDecrement : ScrollAmount.SmallIncrement;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                try
+                {
+                    scrollPattern.Scroll(h, v);
+                }
+                catch (InvalidOperationException)
+                {
+                    // Reached end of scroll range
+                    return i > 0;
+                }
+            }
+            return true;
         }
 
         private static async Task<(int x, int y)?> ResolveElementCoordinatesAsync(

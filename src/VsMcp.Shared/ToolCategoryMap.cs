@@ -106,6 +106,7 @@ namespace VsMcp.Shared
             { "ui_double_click", "UI" },
             { "ui_right_click", "UI" },
             { "ui_drag", "UI" },
+            { "ui_mouse_wheel", "UI" },
             { "ui_set_value", "UI" },
             { "ui_invoke", "UI" },
             { "ui_send_keys", "UI" },
