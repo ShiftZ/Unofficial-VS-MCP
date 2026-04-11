@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.8.0] - 2026-04-11
+
+### Added
+- **`ui_mouse_wheel` tool** — scrolls the mouse wheel over a UI element or screen coordinates. Position can be specified by `automationId`, `name`, or explicit `x`/`y`. Supports both vertical and horizontal scrolling via the `horizontal` flag, and the scroll amount is expressed in wheel notches via `clicks` (positive scrolls up/left, negative scrolls down/right).
+- **Cursor-preserving scroll path** — by default `ui_mouse_wheel` tries `ScrollPattern` first when an element is given, then falls back to `PostMessage WM_MOUSEWHEEL` against the debuggee's window under the target point, and only as a last resort uses physical wheel events. The first two paths never move the system cursor, so the user's mouse pointer is not stolen during automated scrolling. The PostMessage path validates that the target HWND belongs to the debuggee process before sending.
+- **`restoreCursor` option for all physical mouse tools** (`ui_click`, `ui_double_click`, `ui_right_click`, `ui_drag`, `ui_mouse_wheel`) — when physical mouse events are unavoidable, the cursor's previous position is captured before the operation and restored afterwards. Defaults to `true`.
+- **`blockInput` option for all physical mouse tools** — wraps the operation in `BlockInput(true)`/`BlockInput(false)` so that user keyboard/mouse input cannot interfere with the automated action. Defaults to `false`; requires the host process to run with administrator privileges.
+
 ## [0.7.0] - 2026-04-10
 
 ### Added
