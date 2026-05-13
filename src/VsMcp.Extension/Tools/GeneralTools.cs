@@ -161,7 +161,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "execute_command",
-                    "Execute a Visual Studio command by name (e.g. 'Edit.FormatDocument', 'Build.BuildSolution')",
+                    "FALLBACK: execute an arbitrary Visual Studio command by name (e.g. 'Edit.FormatDocument', 'Build.BuildSolution'). Prefer a dedicated tool when one exists — for builds use build_solution/build_project, for debugging use debug_start/debug_stop, for files use file_open, etc. Only use execute_command when no dedicated tool covers the action the user wants.",
                     SchemaBuilder.Create()
                         .AddString("command", "The VS command name to execute", required: true)
                         .AddString("args", "Optional arguments for the command")
@@ -171,7 +171,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "get_status",
-                    "Get the current Visual Studio status including solution state, active document, and debugger mode. Use this instead of curl or other HTTP requests to check VS state.",
+                    "Get the current Visual Studio status — bundles solution state, active document, and debugger mode in one call. Use this instead of curl or other HTTP requests. For a single facet, prefer the dedicated tool: solution_info (solution only), get_active_document (active document only), debug_get_mode (debugger mode only).",
                     SchemaBuilder.Empty()),
                 args => GetStatusAsync(accessor));
 
