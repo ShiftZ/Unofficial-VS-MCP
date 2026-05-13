@@ -15,7 +15,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "immediate_execute",
-                    "Execute an expression with side effects in the debugger context (like the Immediate Window). Can assign variables, call methods with side effects, etc. Only works in break mode.",
+                    "Execute an expression WITH side effects in the debugger context (like the VS Immediate Window) — assignments, mutating method calls, etc. Must be in break mode. For read-only inspection of a value without side effects, prefer debug_evaluate. To persist an expression that re-evaluates each break, use watch_add.",
                     SchemaBuilder.Create()
                         .AddString("expression", "The expression or statement to execute (e.g. 'myVar = 42', 'obj.Reset()')", required: true)
                         .AddInteger("timeout", "Evaluation timeout in milliseconds (default: 5000)")

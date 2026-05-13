@@ -19,7 +19,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "watch_add",
-                    "Add a watch expression and return its current value (only works in break mode)",
+                    "Add a persistent watch expression to the VS Watch window and return its current value. The expression is remembered across breaks (use watch_list to see all). Only works in break mode. For a one-shot read-only evaluation, use debug_evaluate; for a one-shot expression with side effects, use immediate_execute.",
                     SchemaBuilder.Create()
                         .AddString("expression", "The expression to watch (e.g. 'myVariable', 'obj.Property', 'array.Length')", required: true)
                         .Build()),
