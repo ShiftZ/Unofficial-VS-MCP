@@ -34,7 +34,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "process_detach",
-                    "Detach the debugger from a specific process",
+                    "Detach the debugger from a specific debugged process WITHOUT terminating it — the process keeps running freely. Use this when the user wants to release a debug attachment but keep the app running. For ending the whole debug session normally use debug_stop; to force-kill a process use process_terminate.",
                     SchemaBuilder.Create()
                         .AddInteger("processId", "PID of the process to detach from", required: true)
                         .Build()),
@@ -43,7 +43,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "process_terminate",
-                    "Terminate a process being debugged",
+                    "DESTRUCTIVE: force-kill a specific debugged process by PID. This is NOT the normal 'stop debugging' action — for that, use debug_stop. Only use process_terminate when the user explicitly wants to kill a specific PID, or when debug_stop is not appropriate (e.g. unresponsive process). To detach the debugger without killing, use process_detach.",
                     SchemaBuilder.Create()
                         .AddInteger("processId", "PID of the process to terminate", required: true)
                         .Build()),

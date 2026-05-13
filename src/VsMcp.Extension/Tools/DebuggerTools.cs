@@ -18,21 +18,21 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "debug_start",
-                    "Start debugging the startup project (equivalent to F5). Use this instead of trying to launch Visual Studio or press F5 manually.",
+                    "F5: start the startup project WITH the debugger attached (breakpoints hit, exceptions break into VS). Use this when the user wants to debug. For run-without-debugging (Ctrl+F5), use debug_start_without_debugging.",
                     SchemaBuilder.Empty()),
                 args => DebugStartAsync(accessor));
 
             registry.Register(
                 new McpToolDefinition(
                     "debug_start_without_debugging",
-                    "Start the startup project without the debugger attached (equivalent to Ctrl+F5)",
+                    "Ctrl+F5: run the startup project WITHOUT the debugger attached (breakpoints are ignored, exceptions do not break into VS). Use this when the user wants to just run the app. For debugging (F5) with breakpoints, use debug_start.",
                     SchemaBuilder.Empty()),
                 args => DebugStartWithoutDebuggingAsync(accessor));
 
             registry.Register(
                 new McpToolDefinition(
                     "debug_stop",
-                    "Stop debugging the current session",
+                    "Stop the current debug session normally (Shift+F5). Detaches and terminates the debuggee like clicking the VS Stop button. This is the default 'stop debugging' action. To detach without terminating, use process_detach. To force-kill a specific debugged process, use process_terminate.",
                     SchemaBuilder.Empty()),
                 args => DebugStopAsync(accessor));
 
@@ -107,7 +107,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "debug_evaluate",
-                    "Evaluate an expression in the current debug context (only works in break mode)",
+                    "Read-only evaluate an expression in the current debug context — no side effects (no assignments, no method calls that mutate state). Must be in break mode. Use this to inspect variable values. For expressions WITH side effects (assignments, mutating method calls) use immediate_execute. To persist an expression that re-evaluates across breaks, use watch_add.",
                     SchemaBuilder.Create()
                         .AddString("expression", "The expression to evaluate", required: true)
                         .Build()),
