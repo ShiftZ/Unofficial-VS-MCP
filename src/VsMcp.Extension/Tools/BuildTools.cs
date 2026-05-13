@@ -41,7 +41,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "rebuild",
-                    "Clean and rebuild the entire solution",
+                    "Clean and rebuild the entire solution (equivalent to clean followed by build_solution). Use this only when the user explicitly wants a forced rebuild — for a normal build, prefer build_solution (incremental, faster).",
                     SchemaBuilder.Empty()),
                 args => RebuildAsync(accessor));
 
@@ -58,7 +58,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "get_build_errors",
-                    "Get the list of build errors and warnings from the Visual Studio Error List. Call this after build_solution to check results.",
+                    "Get build-produced errors and warnings (MSBuild/compiler output) from the Visual Studio Error List. Call this right after build_solution or build_project to check the build result. For the full Error List including IntelliSense and analyzer items, use error_list_get instead.",
                     SchemaBuilder.Empty()),
                 args => GetBuildErrorsAsync(accessor));
         }

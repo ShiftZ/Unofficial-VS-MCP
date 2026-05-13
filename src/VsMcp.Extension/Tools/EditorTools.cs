@@ -40,7 +40,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "file_read",
-                    "Read the contents of a file. Can optionally read specific line ranges.",
+                    "Read the contents of a file at a given path (does not need to be open in the editor). Can optionally read specific line ranges. For information about the document currently focused in the VS editor (without specifying a path), use get_active_document.",
                     SchemaBuilder.Create()
                         .AddString("path", "Full path to the file to read", required: true)
                         .AddInteger("startLine", "Start line number (1-based, optional)")
@@ -51,7 +51,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "file_write",
-                    "Write content to a file, replacing its entire contents",
+                    "DESTRUCTIVE: overwrite a file's entire contents (no diff, no approval). For partial replacement use file_edit; to show the user a diff preview that requires explicit approval before applying, use edit_preview with the 'content' parameter.",
                     SchemaBuilder.Create()
                         .AddString("path", "Full path to the file to write", required: true)
                         .AddString("content", "The content to write to the file", required: true)
@@ -72,14 +72,14 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "get_active_document",
-                    "Get information about the currently active document in the editor",
+                    "Get information about the document currently focused in the VS editor (path, language, dirty state, caret position). Use this to answer 'what file is the user looking at right now'. To read the contents of a specific file by path, use file_read.",
                     SchemaBuilder.Empty()),
                 args => GetActiveDocumentAsync(accessor));
 
             registry.Register(
                 new McpToolDefinition(
                     "find_in_files",
-                    "Search for text in files within the solution. Searches the file system directly (fast, does not block VS UI). Skips bin/obj/.vs/packages/node_modules directories.",
+                    "Text search across files in the solution directory (literal text or regex). Searches the file system directly (fast, does not block VS UI). Skips bin/obj/.vs/packages/node_modules. Not symbol-aware — for finding references of a symbol use code_find_references; for navigating to a definition use code_goto_definition.",
                     SchemaBuilder.Create()
                         .AddString("query", "The search text or pattern", required: true)
                         .AddString("filePattern", "File pattern to filter (e.g. '*.cs', '*.xaml')")

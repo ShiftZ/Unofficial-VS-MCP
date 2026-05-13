@@ -37,7 +37,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "output_read",
-                    "Read the content of a Visual Studio Output window pane. Supports localized pane names (e.g. 'Build', 'Debug'). Call without pane parameter to list available panes. Returns the last 'tail' lines by default (200). Use tail=0 to read all content. Use 'pattern' to filter lines by regex.",
+                    "Read the content of a Visual Studio Output window pane (Build / Debug / Test / etc. — the panes shown in VS's Output tool window). Supports localized pane names. Call without pane parameter to list available panes. Returns the last 'tail' lines by default (200). Use tail=0 to read all content. Use 'pattern' to filter lines by regex. For the stdout/stderr of a debugged console application (the actual console window, not the VS Output pane), use console_read instead.",
                     SchemaBuilder.Create()
                         .AddString("pane", "The name of the output pane to read (e.g. 'Build', 'Debug')")
                         .AddInteger("tail", "Number of lines to return from the end (default: 200, 0 = all)")
@@ -57,7 +57,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "error_list_get",
-                    "Get all items from the Visual Studio Error List window (errors, warnings, and messages)",
+                    "Get all items currently shown in the Visual Studio Error List window — includes errors/warnings/messages from any source: build, IntelliSense, analyzers, XAML, etc. Use this when the user wants 'everything in the Error List'. For build-only errors collected after a build, prefer get_build_errors.",
                     SchemaBuilder.Create()
                         .AddString("severity", "Filter by severity: 'error', 'warning', 'message', or 'all' (default: 'all')")
                         .Build()),
