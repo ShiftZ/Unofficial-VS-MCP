@@ -23,7 +23,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_connect",
-                    "Connect to a browser for web debugging. Supports Chrome/Edge (via CDP) and Firefox (via RDP). Auto-detects browser type by default.",
+                    "[Browser DOM] Connect to a Chrome/Edge (CDP) or Firefox (RDP) instance for web debugging. Auto-detects browser type by default. Call this before any other web_* tool. Unrelated to ui_* tools which target Win32/WPF desktop apps.",
                     SchemaBuilder.Create()
                         .AddEnum("browser", "Browser type to connect to", new[] { "auto", "chrome", "firefox" })
                         .AddInteger("port", "Debugging port (default: auto-detect)")
@@ -33,14 +33,14 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_disconnect",
-                    "Disconnect from the browser connection",
+                    "[Browser DOM — connected via web_connect] Disconnect from the browser connection",
                     SchemaBuilder.Empty()),
                 args => WebDisconnectAsync());
 
             registry.Register(
                 new McpToolDefinition(
                     "web_status",
-                    "Get the current browser connection status including console/network message counts",
+                    "[Browser DOM — connected via web_connect] Get the current browser connection status including console/network message counts",
                     SchemaBuilder.Empty()),
                 args => WebStatusAsync());
 
@@ -48,7 +48,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_navigate",
-                    "Navigate the browser to a URL. Optionally wait for the page load event.",
+                    "[Browser DOM — connected via web_connect] Navigate the connected browser to a URL. Optionally wait for the page load event.",
                     SchemaBuilder.Create()
                         .AddString("url", "The URL to navigate to", required: true)
                         .AddBoolean("waitForLoad", "Wait for the page load event (default: true)")
@@ -59,7 +59,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_screenshot",
-                    "Capture a screenshot of the current page. Returns the image as base64.",
+                    "[Browser DOM — connected via web_connect] Capture a screenshot of the current browser page. Returns the image as base64. For screenshots of a debugged desktop app use ui_capture_window instead.",
                     SchemaBuilder.Create()
                         .AddEnum("format", "Image format", new[] { "png", "jpeg" })
                         .AddInteger("quality", "JPEG quality 0-100 (only for jpeg format)")
@@ -70,7 +70,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_dom_get",
-                    "Get the DOM tree of the current page with configurable depth",
+                    "[Browser DOM — connected via web_connect] Get the DOM tree of the current browser page with configurable depth. For the UI tree of a debugged desktop app use ui_get_tree or ui_snapshot instead.",
                     SchemaBuilder.Create()
                         .AddInteger("depth", "Maximum depth of the DOM tree to return (default: 3)")
                         .Build()),
@@ -79,7 +79,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_dom_query",
-                    "Query DOM elements using a CSS selector. returnType: nodes (default, returns node IDs/info), html (returns outerHTML), attributes (returns all attributes)",
+                    "[Browser DOM — connected via web_connect] Query DOM elements in the current browser page using a CSS selector. returnType: nodes (default, returns node IDs/info), html (returns outerHTML), attributes (returns all attributes). For UI elements in a debugged desktop app use ui_find_elements (Name/AutomationId/ClassName/ControlType) instead.",
                     SchemaBuilder.Create()
                         .AddString("selector", "CSS selector to query", required: true)
                         .AddEnum("returnType", "What to return for matching elements", new[] { "nodes", "html", "attributes" })
@@ -90,7 +90,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_console",
-                    "Manage browser console messages. action: enable (start collecting), get (retrieve messages), clear (clear buffer)",
+                    "[Browser DOM — connected via web_connect] Manage browser DevTools console messages (console.log/warn/error from the page). action: enable (start collecting), get (retrieve messages), clear (clear buffer). For the VS Output window use output_read; for a debugged console application's stdout use console_read.",
                     SchemaBuilder.Create()
                         .AddEnum("action", "Operation to perform", new[] { "enable", "get", "clear" }, required: true)
                         .AddString("level", "Filter by level when action=get: log, warn, error, info, debug")
@@ -101,7 +101,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_js_execute",
-                    "Execute JavaScript in the browser page context. Supports await for promises.",
+                    "[Browser DOM — connected via web_connect] Execute JavaScript in the browser page context. Supports await for promises. For evaluating C#/.NET expressions in a debugged process use debug_evaluate (read-only) or immediate_execute (side effects).",
                     SchemaBuilder.Create()
                         .AddString("expression", "JavaScript expression to evaluate", required: true)
                         .AddBoolean("awaitPromise", "If true, await the result if it's a Promise (default: false)")
@@ -112,7 +112,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_network",
-                    "Manage network monitoring. action: enable (start capturing), get (retrieve entries), clear (clear buffer)",
+                    "[Browser DOM — connected via web_connect] Manage browser network monitoring (HTTP requests issued by the page). action: enable (start capturing), get (retrieve entries), clear (clear buffer).",
                     SchemaBuilder.Create()
                         .AddEnum("action", "Operation to perform", new[] { "enable", "get", "clear" }, required: true)
                         .AddString("urlFilter", "Filter entries by URL substring when action=get (case-insensitive)")
@@ -124,7 +124,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_element_click",
-                    "Click a DOM element found by CSS selector (uses JavaScript click)",
+                    "[Browser DOM — connected via web_connect] Click a DOM element in the current browser page, located by CSS selector (uses JavaScript click). For clicking a UI element in a debugged desktop app use ui_click (AutomationId/Name) instead.",
                     SchemaBuilder.Create()
                         .AddString("selector", "CSS selector to find the element to click", required: true)
                         .Build()),
@@ -133,7 +133,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "web_element_set_value",
-                    "Set the value of an input element found by CSS selector. Uses native setter for React compatibility.",
+                    "[Browser DOM — connected via web_connect] Set the value of an <input>/<textarea> in the current browser page, located by CSS selector. Uses native setter for React compatibility. For setting a value on a UI element in a debugged desktop app use ui_set_value (ValuePattern) instead.",
                     SchemaBuilder.Create()
                         .AddString("selector", "CSS selector to find the input element", required: true)
                         .AddString("value", "The value to set", required: true)

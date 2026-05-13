@@ -224,14 +224,14 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_capture_window",
-                    "Capture a screenshot of the debugged application's main window as a base64 PNG image",
+                    "[Windows UIA — desktop app being debugged] Capture a screenshot of the debugged application's main window as a base64 PNG image. For web pages use web_screenshot instead.",
                     SchemaBuilder.Empty()),
                 args => UiCaptureWindowAsync(accessor));
 
             registry.Register(
                 new McpToolDefinition(
                     "ui_capture_region",
-                    "Capture a screenshot of a specific region of the debugged application's window",
+                    "[Windows UIA — desktop app being debugged] Capture a screenshot of a specific region of the debugged application's window. For web pages use web_screenshot instead.",
                     SchemaBuilder.Create()
                         .AddInteger("x", "X coordinate of the region (relative to window)", required: true)
                         .AddInteger("y", "Y coordinate of the region (relative to window)", required: true)
@@ -244,10 +244,11 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_snapshot",
-                    "Capture a compact semantic snapshot of the debugged application's main window in a single call. " +
+                    "[Windows UIA — desktop app being debugged] Capture a compact semantic snapshot of the debugged application's main window in a single call. " +
                     "Returns a pruned UI Automation tree (omits invisible/boring nodes, includes actionable patterns, " +
                     "state flags, rect, and focused element) plus an optional screenshot. " +
-                    "Optimized for autonomous exploration and LLM-driven UI testing; prefer this over ui_get_tree + ui_capture_window.",
+                    "Optimized for autonomous exploration and LLM-driven UI testing; prefer this over ui_get_tree + ui_capture_window. " +
+                    "For web pages use web_dom_get + web_screenshot instead.",
                     SchemaBuilder.Create()
                         .AddInteger("depth", "Maximum tree depth (default: 8)")
                         .AddInteger("maxElements", "Maximum total elements in the tree (default: 300)")
@@ -260,7 +261,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_get_tree",
-                    "Get the UI element tree of the debugged application's main window",
+                    "[Windows UIA — desktop app being debugged] Get the raw UI element tree of the debugged application's main window. Prefer ui_snapshot unless you specifically need the unpruned tree. For web pages use web_dom_get instead.",
                     SchemaBuilder.Create()
                         .AddInteger("depth", "Maximum depth of the tree (default: 3)")
                         .AddInteger("maxChildren", "Maximum number of child elements to enumerate per node (default: 50)")
@@ -271,11 +272,11 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_find_elements",
-                    "Find UI elements matching specified criteria in the debugged application. " +
-                    "String fields (name, automationId, className) support match modes: 'exact' (default), " +
-                    "'contains' (case-insensitive substring), and 'regex' (case-insensitive). " +
+                    "[Windows UIA — desktop app being debugged] Find UI elements matching specified criteria (Name / AutomationId / ClassName / ControlType) in the debugged desktop application. " +
+                    "String fields support match modes: 'exact' (default), 'contains' (case-insensitive substring), and 'regex' (case-insensitive). " +
                     "Use 'hasPattern' to require supported UIA patterns (invoke, toggle, select, setvalue, expand). " +
-                    "Use 'ancestorAutomationId' to scope the search to the descendants of a specific element.",
+                    "Use 'ancestorAutomationId' to scope the search to the descendants of a specific element. " +
+                    "For browser DOM elements use web_dom_query (CSS selectors) instead.",
                     SchemaBuilder.Create()
                         .AddString("name", "Name of the UI element to find")
                         .AddString("nameMatch", "Match mode for 'name': 'exact' (default), 'contains', 'regex'")
@@ -293,10 +294,11 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_wait_for_element",
-                    "Wait until a UI element matching the given criteria reaches the specified state. " +
+                    "[Windows UIA — desktop app being debugged] Wait until a UI element matching the given criteria reaches the specified state. " +
                     "Polls the UI Automation tree at regular intervals and returns as soon as the condition " +
                     "is met or the timeout elapses. States: 'appears' (default), 'disappears', 'enabled', 'focused'. " +
-                    "Use this instead of sleeping after triggering a UI action.",
+                    "Use this instead of sleeping after triggering a UI action. " +
+                    "Browser DOM has no equivalent wait helper — use web_js_execute with a polling expression.",
                     SchemaBuilder.Create()
                         .AddString("name", "Name of the UI element to match")
                         .AddString("automationId", "AutomationId of the UI element to match")
@@ -311,7 +313,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_wait_idle",
-                    "Wait until the UI Automation tree stops changing for a quiet period. " +
+                    "[Windows UIA — desktop app being debugged] Wait until the UI Automation tree stops changing for a quiet period. " +
                     "Useful after triggering an action that may cause asynchronous UI updates (loading, layout, " +
                     "progressive rendering). Returns as soon as the element count is stable for quietMs, " +
                     "or when the timeout is reached.",
@@ -325,7 +327,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_get_element",
-                    "Get detailed properties of a specific UI element by its AutomationId",
+                    "[Windows UIA — desktop app being debugged] Get detailed properties of a specific UI element by its AutomationId. For browser DOM elements use web_dom_query with returnType='attributes'.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element", required: true)
                         .Build()),
@@ -334,10 +336,11 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_click",
-                    "Click a UI element by AutomationId, Name, or screen coordinates. " +
+                    "[Windows UIA — desktop app being debugged] Click a UI element in a Win32/WPF/WinForms application by AutomationId, Name, or screen coordinates. " +
                     "When an element is given, InvokePattern is tried first (no cursor movement). " +
                     "For physical clicks (coordinates or pattern-less elements), the cursor is restored " +
-                    "to its previous position by default.",
+                    "to its previous position by default. " +
+                    "For clicking DOM elements in a browser page use web_element_click (CSS selector) instead.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element to click")
                         .AddString("name", "Name of the UI element to click (used if automationId is not provided)")
@@ -352,8 +355,9 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_double_click",
-                    "Double-click a UI element by AutomationId, Name, or screen coordinates. " +
-                    "Always uses physical mouse events; cursor is restored to its previous position by default.",
+                    "[Windows UIA — desktop app being debugged] Double-click a UI element in a desktop app by AutomationId, Name, or screen coordinates. " +
+                    "Always uses physical mouse events; cursor is restored to its previous position by default. " +
+                    "Browser DOM has no double-click helper — use web_js_execute with dispatchEvent('dblclick').",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element to double-click")
                         .AddString("name", "Name of the UI element to double-click (used if automationId is not provided)")
@@ -368,8 +372,9 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_right_click",
-                    "Right-click a UI element by AutomationId, Name, or screen coordinates to open context menus. " +
-                    "Always uses physical mouse events; cursor is restored to its previous position by default.",
+                    "[Windows UIA — desktop app being debugged] Right-click a UI element in a desktop app by AutomationId, Name, or screen coordinates to open context menus. " +
+                    "Always uses physical mouse events; cursor is restored to its previous position by default. " +
+                    "Browser DOM has no right-click helper — use web_js_execute with dispatchEvent('contextmenu').",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element to right-click")
                         .AddString("name", "Name of the UI element to right-click (used if automationId is not provided)")
@@ -384,8 +389,9 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_drag",
-                    "Perform a drag-and-drop operation from start coordinates to end coordinates. " +
-                    "Cursor is restored to its previous position after the drag completes by default.",
+                    "[Windows UIA — desktop app being debugged] Perform a drag-and-drop operation in a desktop app from start coordinates to end coordinates. " +
+                    "Cursor is restored to its previous position after the drag completes by default. " +
+                    "For browser DOM drag use web_js_execute with synthetic drag events.",
                     SchemaBuilder.Create()
                         .AddInteger("startX", "Screen X coordinate of the drag start point", required: true)
                         .AddInteger("startY", "Screen Y coordinate of the drag start point", required: true)
@@ -401,14 +407,15 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_mouse_wheel",
-                    "Scroll the mouse wheel over a UI element or screen coordinates. " +
+                    "[Windows UIA — desktop app being debugged] Scroll the mouse wheel over a UI element or screen coordinates in a desktop app. " +
                     "Specify the position by AutomationId, Name, or x/y coordinates. " +
                     "Use 'clicks' to control the amount and direction: positive scrolls up (away from user), " +
                     "negative scrolls down (toward user). One click equals one wheel notch (WHEEL_DELTA=120). " +
                     "Set 'horizontal' to true for horizontal wheel scrolling. " +
                     "By default, when an element is given, ScrollPattern is used (no cursor movement, " +
                     "user's mouse is not disturbed). Falls back to physical wheel events otherwise. " +
-                    "When physical events are used, the cursor is restored to its previous position.",
+                    "When physical events are used, the cursor is restored to its previous position. " +
+                    "For scrolling a browser page use web_js_execute with window.scrollBy.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element to scroll over")
                         .AddString("name", "Name of the UI element to scroll over (used if automationId is not provided)")
@@ -426,7 +433,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_set_value",
-                    "Set the value of a UI element (e.g. text input) using ValuePattern",
+                    "[Windows UIA — desktop app being debugged] Set the value of a UI element (e.g. WPF/WinForms text input) using ValuePattern. For setting an <input> value in a browser page use web_element_set_value (CSS selector) instead.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element", required: true)
                         .AddString("value", "The value to set", required: true)
@@ -436,7 +443,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_invoke",
-                    "Invoke the default action on a UI element (e.g. click a button) using InvokePattern",
+                    "[Windows UIA — desktop app being debugged] Invoke the default action on a UI element (e.g. click a WPF/WinForms button) using InvokePattern only — requires AutomationId and the element must support InvokePattern. For richer click semantics (Name/coords, physical-click fallback when InvokePattern is unavailable) prefer ui_click. For browser DOM elements use web_element_click instead.",
                     SchemaBuilder.Create()
                         .AddString("automationId", "AutomationId of the UI element", required: true)
                         .Build()),
@@ -445,12 +452,13 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "ui_send_keys",
-                    "Send keyboard input to the debugged application's foreground window. " +
+                    "[Windows UIA — desktop app being debugged] Send keyboard input via Win32 SendInput to the debugged desktop application's foreground window. " +
                     "Use 'keys' for key combinations (e.g. 'ctrl+f', 'alt+f4', 'shift+ctrl+s', 'enter', 'f5') " +
                     "or 'text' to type a string of characters. Modifier keys: ctrl, shift, alt, win. " +
                     "Named keys: enter, escape/esc, tab, backspace/bs, delete/del, insert/ins, home, end, " +
                     "pageup/pgup, pagedown/pgdn, up, down, left, right, space, f1-f12. " +
-                    "For single characters like 'a', 'A', '1', use keys='a'. Multiple key presses can be separated with spaces: keys='tab tab enter'.",
+                    "For single characters like 'a', 'A', '1', use keys='a'. Multiple key presses can be separated with spaces: keys='tab tab enter'. " +
+                    "For typing into a browser page use web_element_set_value or web_js_execute with KeyboardEvent.",
                     SchemaBuilder.Create()
                         .AddString("keys", "Key combination or sequence to send (e.g. 'ctrl+f', 'alt+tab', 'enter', 'tab tab enter')")
                         .AddString("text", "Text string to type character by character")
