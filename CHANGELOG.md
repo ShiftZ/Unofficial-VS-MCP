@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.9.0] - 2026-05-13
+
+### Improved
+- **Tool descriptions tuned for agent selection accuracy** — 30 tool descriptions were revised based on an empirical bias-free dry-run methodology (see `tuning/vs-mcp/`). No runtime behavior changed; only the strings exposed to LLM agents via `tools/list`. Agents now select the correct tool with 91.7% accuracy on the main scenario set (33/36) and 93.2% with hold-outs (41/44), and 100% accuracy on 10 destructive-or-critical operations (process termination, debug start/stop, etc.).
+- **UI Automation vs Browser DOM cluster boundary made explicit** — every `ui_*` description now front-loads `[Windows UIA — desktop app being debugged]` and every `web_*` description front-loads `[Browser DOM — connected via web_connect]`. Each tool also carries a reciprocal cross-cluster reference (e.g. `ui_click` points to `web_element_click` for browser pages; `web_screenshot` points to `ui_capture_window` for desktop apps). Eliminates UIA↔Web cross-cluster confusion that previously occurred on utterances like "click the button" or "take a screenshot".
+- **Critical start/stop/kill operations disambiguated** — `debug_start` / `debug_start_without_debugging` front-load `F5` / `Ctrl+F5` and explicitly cross-reference. `debug_stop`, `process_detach`, and `process_terminate` each lead with their distinct intent (normal session stop / release attachment without killing / DESTRUCTIVE force-kill) and cross-reference each other.
+- **Expression-evaluation triplet differentiated** — `debug_evaluate` (read-only, one-shot), `immediate_execute` (side-effecting, one-shot), and `watch_add` (persistent, re-evaluates across breaks) now mutually cross-reference and lead with their distinguishing property.
+- **File / output / error-list operations differentiated** — `file_read` vs `get_active_document`, `output_read` vs `console_read`, `error_list_get` vs `get_build_errors`, `find_in_files` vs `code_find_references`, `file_write` vs `file_edit` vs `edit_preview` all gained explicit "use X instead when …" clauses.
+- **`execute_command` repositioned as a fallback** — description now explicitly directs callers to dedicated tools (`build_solution`, `debug_start`, `file_open`, …) and limits `execute_command` to cases where no dedicated tool exists.
+- **`get_status`, `rebuild`, `ui_invoke` narrowed** — each now points to the narrower dedicated tool for common cases (`debug_get_mode` / `get_active_document` / `solution_info` for single-facet status queries; `build_solution` for normal builds; `ui_click` for richer click semantics).
+
 ## [0.8.0] - 2026-04-11
 
 ### Added
