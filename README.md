@@ -8,7 +8,7 @@
 
 ## Features
 
-VS MCP Server exposes **111 tools** across the following categories:
+VS MCP Server exposes **112 tools** across the following categories:
 
 | Category | Tools | Description |
 |----------|------:|-------------|
@@ -19,7 +19,7 @@ VS MCP Server exposes **111 tools** across the following categories:
 | Edit Preview | 4 | Diff preview, approve/reject edits with VS diff viewer |
 | Code Navigation | 3 | Go to definition, find references, go to implementation |
 | Solution Explorer | 6 | Add/remove projects, files, and references |
-| Debugger | 13 | Start/stop/restart, attach, stepping, call stack, locals, threads, evaluate, run without debugging |
+| Debugger | 14 | Start/stop/restart, attach, stepping, wait for stops, call stack, locals, threads, evaluate, run without debugging |
 | Breakpoints | 4 | Set/remove/list, enable/disable breakpoints |
 | Output & Diagnostics | 5 | Read/write/clear output panes, error list, XAML binding errors |
 | Console | 3 | Read console output, send input/keys, get console info for debugged apps |
@@ -121,6 +121,7 @@ VS MCP Server exposes **111 tools** across the following categories:
 | `debug_get_locals` | Get the local variables in the current stack frame |
 | `debug_get_threads` | Get all threads in the current debug session |
 | `debug_get_mode` | Get the current debugger mode (Design, Running, or Break) |
+| `debugger_wait_break` | Wait for a debugger break or debug-session stop using VS debugger events |
 | `debug_evaluate` | Evaluate an expression in the current debug context (only works in break mode) |
 
 #### Breakpoint

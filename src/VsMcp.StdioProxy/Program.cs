@@ -24,7 +24,7 @@ namespace VsMcp.StdioProxy
     {
         private static readonly HttpClient HttpClient = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(90)
+            Timeout = Timeout.InfiniteTimeSpan
         };
 
         private static readonly string LogPath = Path.Combine(
@@ -297,8 +297,7 @@ namespace VsMcp.StdioProxy
             }
             catch (TaskCanceledException)
             {
-                // HttpClient.Timeout fired
-                await Console.Error.WriteLineAsync("[VsMcp.StdioProxy] Request timed out");
+                await Console.Error.WriteLineAsync("[VsMcp.StdioProxy] Request canceled");
                 if (id != null)
                 {
                     var timeoutResult = new JObject
@@ -308,7 +307,7 @@ namespace VsMcp.StdioProxy
                             new JObject
                             {
                                 ["type"] = "text",
-                                ["text"] = "Tool execution timed out. Visual Studio may be busy or blocked by a modal dialog."
+                                ["text"] = "Tool execution was canceled."
                             }
                         },
                         ["isError"] = true

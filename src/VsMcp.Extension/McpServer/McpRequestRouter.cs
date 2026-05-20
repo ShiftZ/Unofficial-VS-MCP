@@ -19,6 +19,7 @@ namespace VsMcp.Extension.McpServer
         private static readonly string LogPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "VsMcp", "debug.log");
+        private static readonly TimeSpan DefaultToolTimeout = TimeSpan.FromSeconds(60);
 
         internal static void Log(string message)
         {
@@ -154,15 +155,16 @@ namespace VsMcp.Extension.McpServer
 
                 // Run tool handler with timeout
                 var toolTask = Task.Run(() => handler(args));
-                var timeoutTask = Task.Delay(TimeSpan.FromSeconds(60));
-                Log($"[Router] {toolName}: awaiting Task.WhenAny (60s timeout)...");
+                var handlerTimeout = _registry.GetTimeout(toolName, args, DefaultToolTimeout);
+                var timeoutTask = Task.Delay(handlerTimeout);
+                Log($"[Router] {toolName}: awaiting Task.WhenAny ({handlerTimeout.TotalSeconds:0.#}s timeout)...");
                 var completed = await Task.WhenAny(toolTask, timeoutTask).ConfigureAwait(false);
 
                 if (completed == timeoutTask)
                 {
-                    Log($"[Router] {toolName}: HANDLER TIMED OUT (60s)");
+                    Log($"[Router] {toolName}: HANDLER TIMED OUT ({handlerTimeout.TotalSeconds:0.#}s)");
                     var timeoutResult = McpToolResult.Error(
-                        $"Tool '{toolName}' timed out after 60 seconds. "
+                        $"Tool '{toolName}' timed out after {handlerTimeout.TotalSeconds:0.#} seconds. "
                         + "Visual Studio may be busy or blocked by a modal dialog.");
                     return JsonRpcResponse.Success(request.Id, timeoutResult);
                 }

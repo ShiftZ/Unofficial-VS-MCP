@@ -51,6 +51,7 @@ namespace VsMcp.Shared
             { "debug_get_locals", "Debugger" },
             { "debug_get_threads", "Debugger" },
             { "debug_get_mode", "Debugger" },
+            { "debugger_wait_break", "Debugger" },
             { "debug_evaluate", "Debugger" },
             // Breakpoint
             { "breakpoint_set", "Breakpoint" },

@@ -8,11 +8,14 @@ using VsMcp.Extension.McpServer;
 using VsMcp.Extension.Services;
 using VsMcp.Shared;
 using VsMcp.Shared.Protocol;
+using Stopwatch = System.Diagnostics.Stopwatch;
 
 namespace VsMcp.Extension.Tools
 {
     public static class DebuggerTools
     {
+        private static readonly TimeSpan WaitBreakTimeoutPadding = TimeSpan.FromSeconds(15);
+
         public static void Register(McpToolRegistry registry, VsServiceAccessor accessor)
         {
             registry.Register(
@@ -103,6 +106,16 @@ namespace VsMcp.Extension.Tools
                     "Get the current debugger mode (Design, Running, or Break)",
                     SchemaBuilder.Empty()),
                 args => DebugGetModeAsync(accessor));
+
+            registry.Register(
+                new McpToolDefinition(
+                    "debugger_wait_break",
+                    "Wait until the debugger stops or the timeout expires. This is event-driven: it listens for VS debugger break/design-mode events, does not continue execution, and returns the stop reason plus current break context when available. The time_out parameter is in milliseconds.",
+                    SchemaBuilder.Create()
+                        .AddInteger("time_out", "Timeout in milliseconds", required: true)
+                        .Build()),
+                args => DebuggerWaitBreakAsync(accessor, args),
+                GetDebuggerWaitBreakTimeout);
 
             registry.Register(
                 new McpToolDefinition(
@@ -465,6 +478,62 @@ namespace VsMcp.Extension.Tools
             });
         }
 
+        private static async Task<McpToolResult> DebuggerWaitBreakAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var timeoutMs = args.Value<int?>("time_out");
+            if (!timeoutMs.HasValue || timeoutMs.Value <= 0)
+                return McpToolResult.Error("Parameter 'time_out' is required and must be positive");
+
+            var stopwatch = Stopwatch.StartNew();
+            DebuggerWaitRegistration registration = null;
+
+            try
+            {
+                registration = await accessor.RunOnUIThreadAsync(() =>
+                {
+                    var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                        .Run(() => accessor.GetDteAsync());
+
+                    var debuggerEvents = dte.Events.DebuggerEvents;
+                    var waitRegistration = new DebuggerWaitRegistration(debuggerEvents);
+                    waitRegistration.Subscribe();
+
+                    var currentMode = dte.Debugger.CurrentMode;
+                    if (currentMode != dbgDebugMode.dbgRunMode)
+                        waitRegistration.Complete(currentMode == dbgDebugMode.dbgBreakMode ? "break" : "stopped");
+
+                    return waitRegistration;
+                });
+
+                var delayTask = Task.Delay(timeoutMs.Value);
+                var completed = await Task.WhenAny(registration.WaitTask, delayTask).ConfigureAwait(false);
+                var signal = completed == registration.WaitTask || registration.WaitTask.IsCompleted
+                    ? await registration.WaitTask.ConfigureAwait(false)
+                    : new WaitBreakSignal("timeout", null, null);
+
+                stopwatch.Stop();
+
+                return await accessor.RunOnUIThreadAsync(() =>
+                {
+                    var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                        .Run(() => accessor.GetDteAsync());
+
+                    return CreateWaitBreakResult(dte, signal, stopwatch.ElapsedMilliseconds);
+                });
+            }
+            finally
+            {
+                if (registration != null)
+                {
+                    try
+                    {
+                        await accessor.RunOnUIThreadAsync(() => registration.Unsubscribe());
+                    }
+                    catch { }
+                }
+            }
+        }
+
         private static async Task<McpToolResult> DebugEvaluateAsync(VsServiceAccessor accessor, JObject args)
         {
             var expression = args.Value<string>("expression");
@@ -509,6 +578,147 @@ namespace VsMcp.Extension.Tools
                     frame = dte.Debugger.CurrentStackFrame?.FunctionName
                 });
             });
+        }
+
+        private static McpToolResult CreateWaitBreakResult(DTE2 dte, WaitBreakSignal signal, long elapsedMs)
+        {
+            var mode = "Unknown";
+            dbgDebugMode? currentMode = null;
+
+            try
+            {
+                currentMode = dte.Debugger.CurrentMode;
+                mode = GetDebuggerModeName(currentMode.Value);
+            }
+            catch { }
+
+            var result = new Dictionary<string, object>
+            {
+                ["status"] = signal.Status,
+                ["mode"] = mode,
+                ["reasonCode"] = signal.ReasonCode,
+                ["eventName"] = signal.EventName,
+                ["timedOut"] = signal.Status == "timeout",
+                ["elapsedMs"] = elapsedMs
+            };
+
+            if (currentMode != dbgDebugMode.dbgBreakMode)
+                return McpToolResult.Success(result);
+
+            try
+            {
+                var thread = dte.Debugger.CurrentThread;
+                if (thread != null)
+                {
+                    result["threadId"] = thread.ID;
+                    result["threadName"] = thread.Name;
+                }
+            }
+            catch { }
+
+            try
+            {
+                var frame = dte.Debugger.CurrentStackFrame;
+                if (frame != null)
+                {
+                    result["functionName"] = frame.FunctionName;
+                    result["module"] = frame.Module;
+                    result["fileName"] = DebugHelpers.TryGetFrameFileName(frame);
+                    result["line"] = DebugHelpers.TryGetFrameLine(frame);
+                    result["language"] = frame.Language;
+                }
+            }
+            catch { }
+
+            return McpToolResult.Success(result);
+        }
+
+        private static TimeSpan GetDebuggerWaitBreakTimeout(JObject args)
+        {
+            var timeoutMs = args.Value<int?>("time_out");
+            if (!timeoutMs.HasValue || timeoutMs.Value <= 0)
+                return WaitBreakTimeoutPadding;
+
+            var totalMs = Math.Min(
+                (long)timeoutMs.Value + (long)WaitBreakTimeoutPadding.TotalMilliseconds,
+                int.MaxValue);
+            return TimeSpan.FromMilliseconds(totalMs);
+        }
+
+        private static string GetDebuggerModeName(dbgDebugMode mode)
+        {
+            switch (mode)
+            {
+                case dbgDebugMode.dbgRunMode:
+                    return "Running";
+                case dbgDebugMode.dbgBreakMode:
+                    return "Break";
+                case dbgDebugMode.dbgDesignMode:
+                default:
+                    return "Design";
+            }
+        }
+
+        private sealed class WaitBreakSignal
+        {
+            public WaitBreakSignal(string status, string eventName, string reasonCode)
+            {
+                Status = status;
+                EventName = eventName;
+                ReasonCode = reasonCode;
+            }
+
+            public string Status { get; }
+            public string EventName { get; }
+            public string ReasonCode { get; }
+        }
+
+        private sealed class DebuggerWaitRegistration
+        {
+            private readonly DebuggerEvents _debuggerEvents;
+            private readonly TaskCompletionSource<WaitBreakSignal> _completion =
+                new TaskCompletionSource<WaitBreakSignal>(TaskCreationOptions.RunContinuationsAsynchronously);
+            private bool _subscribed;
+
+            public DebuggerWaitRegistration(DebuggerEvents debuggerEvents)
+            {
+                _debuggerEvents = debuggerEvents ?? throw new ArgumentNullException(nameof(debuggerEvents));
+            }
+
+            public Task<WaitBreakSignal> WaitTask => _completion.Task;
+
+            public void Subscribe()
+            {
+                if (_subscribed) return;
+
+                _debuggerEvents.OnEnterBreakMode += OnEnterBreakMode;
+                _debuggerEvents.OnEnterDesignMode += OnEnterDesignMode;
+                _subscribed = true;
+            }
+
+            public void Unsubscribe()
+            {
+                if (!_subscribed) return;
+
+                _debuggerEvents.OnEnterBreakMode -= OnEnterBreakMode;
+                _debuggerEvents.OnEnterDesignMode -= OnEnterDesignMode;
+                _subscribed = false;
+            }
+
+            public void Complete(string status)
+            {
+                _completion.TrySetResult(new WaitBreakSignal(status, null, null));
+            }
+
+            private void OnEnterBreakMode(dbgEventReason reason, ref dbgExecutionAction executionAction)
+            {
+                _completion.TrySetResult(new WaitBreakSignal("break", "OnEnterBreakMode", reason.ToString()));
+            }
+
+            private void OnEnterDesignMode(dbgEventReason reason)
+            {
+                _completion.TrySetResult(new WaitBreakSignal("stopped", "OnEnterDesignMode", reason.ToString()));
+            }
         }
     }
 }
