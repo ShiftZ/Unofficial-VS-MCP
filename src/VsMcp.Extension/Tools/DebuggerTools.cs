@@ -15,15 +15,28 @@ namespace VsMcp.Extension.Tools
     public static class DebuggerTools
     {
         private static readonly TimeSpan WaitBreakTimeoutPadding = TimeSpan.FromSeconds(15);
+        private static readonly TimeSpan DebugStartModeChangeTimeout = TimeSpan.FromSeconds(5);
 
         public static void Register(McpToolRegistry registry, VsServiceAccessor accessor)
         {
             registry.Register(
                 new McpToolDefinition(
                     "debug_start",
-                    "F5: start the startup project WITH the debugger attached (breakpoints hit, exceptions break into VS). Use this when the user wants to debug. For run-without-debugging (Ctrl+F5), use debug_start_without_debugging.",
-                    SchemaBuilder.Empty()),
-                args => DebugStartAsync(accessor));
+                    "F5: start the startup project WITH the debugger attached (breakpoints hit, exceptions break into VS). Starts only from Design mode; otherwise leaves the current debug session untouched. Use this when the user wants to debug. For run-without-debugging (Ctrl+F5), use debug_start_without_debugging.",
+                    SchemaBuilder.Create()
+                        .AddBoolean("wait_mode_change", "If true, wait up to 5 seconds for VS to enter Run mode after starting.")
+                        .Build()),
+                args => DebugStartAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
+                    "debug_start_wait_break",
+                    "F5: start the startup project WITH the debugger attached, then wait until the debugger breaks/stops or time_out expires. Starts only from Design mode; otherwise leaves the current debug session untouched. Equivalent to debug_start followed by debugger_wait_break.",
+                    SchemaBuilder.Create()
+                        .AddInteger("time_out", "Timeout in milliseconds", required: true)
+                        .Build()),
+                args => DebugStartWaitBreakAsync(accessor, args),
+                GetDebugStartWaitBreakTimeout);
 
             registry.Register(
                 new McpToolDefinition(
@@ -127,16 +140,108 @@ namespace VsMcp.Extension.Tools
                 args => DebugEvaluateAsync(accessor, args));
         }
 
-        private static async Task<McpToolResult> DebugStartAsync(VsServiceAccessor accessor)
+        private static Task<McpToolResult> DebugStartAsync(VsServiceAccessor accessor, JObject args)
         {
-            return await accessor.RunOnUIThreadAsync(() =>
-            {
-                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
-                    .Run(() => accessor.GetDteAsync());
+            var waitModeChange = args.Value<bool?>("wait_mode_change") == true;
+            return DebugStartAsync(accessor, waitModeChange);
+        }
 
-                dte.Solution.SolutionBuild.Debug();
-                return McpToolResult.Success("Debugging started");
-            });
+        private static async Task<McpToolResult> DebugStartAsync(VsServiceAccessor accessor, bool waitModeChange)
+        {
+            if (!waitModeChange)
+            {
+                return await accessor.RunOnUIThreadAsync(() =>
+                {
+                    var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                        .Run(() => accessor.GetDteAsync());
+
+                    var currentMode = dte.Debugger.CurrentMode;
+                    if (currentMode != dbgDebugMode.dbgDesignMode)
+                        return McpToolResult.Success($"Debugger is already in {GetDebuggerModeName(currentMode)} mode");
+
+                    dte.Solution.SolutionBuild.Debug();
+                    return McpToolResult.Success("Debugging started");
+                });
+            }
+
+            var startResult = await DebugStartAndWaitRunAsync(accessor);
+            return await CreateDebuggerSignalResultAsync(accessor, startResult.Signal, startResult.ElapsedMs);
+        }
+
+        private static async Task<McpToolResult> DebugStartWaitBreakAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var startResult = await DebugStartAndWaitRunAsync(accessor);
+            if (startResult.Signal.Status == "timeout")
+                return await CreateDebuggerSignalResultAsync(accessor, startResult.Signal, startResult.ElapsedMs);
+
+            return await DebuggerWaitBreakAsync(accessor, args);
+        }
+
+        private static async Task<DebuggerWaitResult> DebugStartAndWaitRunAsync(VsServiceAccessor accessor)
+        {
+            var stopwatch = Stopwatch.StartNew();
+            DebuggerRunRegistration registration = null;
+            DebuggerSignal currentSignal = null;
+
+            try
+            {
+                await accessor.RunOnUIThreadAsync(() =>
+                {
+                    var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                        .Run(() => accessor.GetDteAsync());
+
+                    var currentMode = dte.Debugger.CurrentMode;
+                    if (currentMode != dbgDebugMode.dbgDesignMode)
+                    {
+                        currentSignal = new DebuggerSignal(GetDebuggerStatusName(currentMode), null, null);
+                        return;
+                    }
+
+                    var debuggerEvents = dte.Events.DebuggerEvents;
+                    registration = new DebuggerRunRegistration(debuggerEvents);
+                    registration.Subscribe();
+
+                    dte.Solution.SolutionBuild.Debug();
+
+                    switch (dte.Debugger.CurrentMode)
+                    {
+                        case dbgDebugMode.dbgRunMode:
+                            registration.Complete("running");
+                            break;
+                        case dbgDebugMode.dbgBreakMode:
+                            registration.Complete("break");
+                            break;
+                    }
+                });
+
+                if (currentSignal != null)
+                {
+                    stopwatch.Stop();
+                    return new DebuggerWaitResult(currentSignal, stopwatch.ElapsedMilliseconds);
+                }
+
+                var delayTask = Task.Delay(DebugStartModeChangeTimeout);
+#pragma warning disable VSTHRD003 // Event-backed TaskCompletionSource; no UI-thread work is awaited here.
+                var completed = await Task.WhenAny(registration.WaitTask, delayTask);
+                var signal = completed == registration.WaitTask || registration.WaitTask.IsCompleted
+                    ? await registration.WaitTask
+                    : new DebuggerSignal("timeout", null, null);
+#pragma warning restore VSTHRD003
+
+                stopwatch.Stop();
+                return new DebuggerWaitResult(signal, stopwatch.ElapsedMilliseconds);
+            }
+            finally
+            {
+                if (registration != null)
+                {
+                    try
+                    {
+                        await accessor.RunOnUIThreadAsync(() => registration.Unsubscribe());
+                    }
+                    catch { }
+                }
+            }
         }
 
         private static async Task<McpToolResult> DebugStartWithoutDebuggingAsync(VsServiceAccessor accessor)
@@ -509,17 +614,11 @@ namespace VsMcp.Extension.Tools
                 var completed = await Task.WhenAny(registration.WaitTask, delayTask).ConfigureAwait(false);
                 var signal = completed == registration.WaitTask || registration.WaitTask.IsCompleted
                     ? await registration.WaitTask.ConfigureAwait(false)
-                    : new WaitBreakSignal("timeout", null, null);
+                    : new DebuggerSignal("timeout", null, null);
 
                 stopwatch.Stop();
 
-                return await accessor.RunOnUIThreadAsync(() =>
-                {
-                    var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
-                        .Run(() => accessor.GetDteAsync());
-
-                    return CreateWaitBreakResult(dte, signal, stopwatch.ElapsedMilliseconds);
-                });
+                return await CreateDebuggerSignalResultAsync(accessor, signal, stopwatch.ElapsedMilliseconds, includeBreakContext: true);
             }
             finally
             {
@@ -580,7 +679,22 @@ namespace VsMcp.Extension.Tools
             });
         }
 
-        private static McpToolResult CreateWaitBreakResult(DTE2 dte, WaitBreakSignal signal, long elapsedMs)
+        private static async Task<McpToolResult> CreateDebuggerSignalResultAsync(
+            VsServiceAccessor accessor,
+            DebuggerSignal signal,
+            long elapsedMs,
+            bool includeBreakContext = false)
+        {
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                return CreateDebuggerSignalResult(dte, signal, elapsedMs, includeBreakContext);
+            });
+        }
+
+        private static McpToolResult CreateDebuggerSignalResult(DTE2 dte, DebuggerSignal signal, long elapsedMs, bool includeBreakContext)
         {
             var mode = "Unknown";
             dbgDebugMode? currentMode = null;
@@ -602,7 +716,7 @@ namespace VsMcp.Extension.Tools
                 ["elapsedMs"] = elapsedMs
             };
 
-            if (currentMode != dbgDebugMode.dbgBreakMode)
+            if (!includeBreakContext || currentMode != dbgDebugMode.dbgBreakMode)
                 return McpToolResult.Success(result);
 
             try
@@ -645,6 +759,15 @@ namespace VsMcp.Extension.Tools
             return TimeSpan.FromMilliseconds(totalMs);
         }
 
+        private static TimeSpan GetDebugStartWaitBreakTimeout(JObject args)
+        {
+            var waitBreakTimeout = GetDebuggerWaitBreakTimeout(args);
+            var totalMs = Math.Min(
+                (long)waitBreakTimeout.TotalMilliseconds + (long)DebugStartModeChangeTimeout.TotalMilliseconds,
+                int.MaxValue);
+            return TimeSpan.FromMilliseconds(totalMs);
+        }
+
         private static string GetDebuggerModeName(dbgDebugMode mode)
         {
             switch (mode)
@@ -659,9 +782,35 @@ namespace VsMcp.Extension.Tools
             }
         }
 
-        private sealed class WaitBreakSignal
+        private static string GetDebuggerStatusName(dbgDebugMode mode)
         {
-            public WaitBreakSignal(string status, string eventName, string reasonCode)
+            switch (mode)
+            {
+                case dbgDebugMode.dbgRunMode:
+                    return "running";
+                case dbgDebugMode.dbgBreakMode:
+                    return "break";
+                case dbgDebugMode.dbgDesignMode:
+                default:
+                    return "stopped";
+            }
+        }
+
+        private sealed class DebuggerWaitResult
+        {
+            public DebuggerWaitResult(DebuggerSignal signal, long elapsedMs)
+            {
+                Signal = signal ?? throw new ArgumentNullException(nameof(signal));
+                ElapsedMs = elapsedMs;
+            }
+
+            public DebuggerSignal Signal { get; }
+            public long ElapsedMs { get; }
+        }
+
+        private sealed class DebuggerSignal
+        {
+            public DebuggerSignal(string status, string eventName, string reasonCode)
             {
                 Status = status;
                 EventName = eventName;
@@ -673,11 +822,52 @@ namespace VsMcp.Extension.Tools
             public string ReasonCode { get; }
         }
 
+        private sealed class DebuggerRunRegistration
+        {
+            private readonly DebuggerEvents _debuggerEvents;
+            private readonly TaskCompletionSource<DebuggerSignal> _completion =
+                new TaskCompletionSource<DebuggerSignal>(TaskCreationOptions.RunContinuationsAsynchronously);
+            private bool _subscribed;
+
+            public DebuggerRunRegistration(DebuggerEvents debuggerEvents)
+            {
+                _debuggerEvents = debuggerEvents ?? throw new ArgumentNullException(nameof(debuggerEvents));
+            }
+
+            public Task<DebuggerSignal> WaitTask => _completion.Task;
+
+            public void Subscribe()
+            {
+                if (_subscribed) return;
+
+                _debuggerEvents.OnEnterRunMode += OnEnterRunMode;
+                _subscribed = true;
+            }
+
+            public void Unsubscribe()
+            {
+                if (!_subscribed) return;
+
+                _debuggerEvents.OnEnterRunMode -= OnEnterRunMode;
+                _subscribed = false;
+            }
+
+            public void Complete(string status)
+            {
+                _completion.TrySetResult(new DebuggerSignal(status, null, null));
+            }
+
+            private void OnEnterRunMode(dbgEventReason reason)
+            {
+                _completion.TrySetResult(new DebuggerSignal("running", "OnEnterRunMode", reason.ToString()));
+            }
+        }
+
         private sealed class DebuggerWaitRegistration
         {
             private readonly DebuggerEvents _debuggerEvents;
-            private readonly TaskCompletionSource<WaitBreakSignal> _completion =
-                new TaskCompletionSource<WaitBreakSignal>(TaskCreationOptions.RunContinuationsAsynchronously);
+            private readonly TaskCompletionSource<DebuggerSignal> _completion =
+                new TaskCompletionSource<DebuggerSignal>(TaskCreationOptions.RunContinuationsAsynchronously);
             private bool _subscribed;
 
             public DebuggerWaitRegistration(DebuggerEvents debuggerEvents)
@@ -685,7 +875,7 @@ namespace VsMcp.Extension.Tools
                 _debuggerEvents = debuggerEvents ?? throw new ArgumentNullException(nameof(debuggerEvents));
             }
 
-            public Task<WaitBreakSignal> WaitTask => _completion.Task;
+            public Task<DebuggerSignal> WaitTask => _completion.Task;
 
             public void Subscribe()
             {
@@ -707,17 +897,17 @@ namespace VsMcp.Extension.Tools
 
             public void Complete(string status)
             {
-                _completion.TrySetResult(new WaitBreakSignal(status, null, null));
+                _completion.TrySetResult(new DebuggerSignal(status, null, null));
             }
 
             private void OnEnterBreakMode(dbgEventReason reason, ref dbgExecutionAction executionAction)
             {
-                _completion.TrySetResult(new WaitBreakSignal("break", "OnEnterBreakMode", reason.ToString()));
+                _completion.TrySetResult(new DebuggerSignal("break", "OnEnterBreakMode", reason.ToString()));
             }
 
             private void OnEnterDesignMode(dbgEventReason reason)
             {
-                _completion.TrySetResult(new WaitBreakSignal("stopped", "OnEnterDesignMode", reason.ToString()));
+                _completion.TrySetResult(new DebuggerSignal("stopped", "OnEnterDesignMode", reason.ToString()));
             }
         }
     }

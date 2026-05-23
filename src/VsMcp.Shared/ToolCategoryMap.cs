@@ -40,6 +40,7 @@ namespace VsMcp.Shared
             { "find_in_files", "Editor" },
             // Debugger
             { "debug_start", "Debugger" },
+            { "debug_start_wait_break", "Debugger" },
             { "debug_start_without_debugging", "Debugger" },
             { "debug_stop", "Debugger" },
             { "debug_restart", "Debugger" },

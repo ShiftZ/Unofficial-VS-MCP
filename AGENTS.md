@@ -16,16 +16,16 @@ This MCP server is a classic in-process Visual Studio extension. For MCP tools t
 
 ## Notes on StdioProxy Deployment
 
-`VsMcpPackage.DeployStdioProxy()` compares the `FileVersion` of the source and target, and skips the copy when they are the same.
-During development, code is often changed without updating the assembly version, so **a manual copy is required after building**:
+`VsMcpPackage.DeployStdioProxy()` always copies the packaged StdioProxy files into `%LOCALAPPDATA%\VsMcp\bin\` when the extension loads.
+If Visual Studio is already running and you need the proxy updated immediately after a build, copy the Release output manually:
 
 ```powershell
-Copy-Item 'src\VsMcp.StdioProxy\bin\Debug\net8.0\VsMcp.StdioProxy.dll',
-          'src\VsMcp.StdioProxy\bin\Debug\net8.0\VsMcp.StdioProxy.exe',
-          'src\VsMcp.StdioProxy\bin\Debug\net8.0\VsMcp.StdioProxy.deps.json',
-          'src\VsMcp.StdioProxy\bin\Debug\net8.0\VsMcp.StdioProxy.runtimeconfig.json',
-          'src\VsMcp.StdioProxy\bin\Debug\net8.0\VsMcp.Shared.dll',
-          'src\VsMcp.StdioProxy\bin\Debug\net8.0\Newtonsoft.Json.dll' `
+Copy-Item 'src\VsMcp.StdioProxy\bin\Release\net8.0\VsMcp.StdioProxy.dll',
+          'src\VsMcp.StdioProxy\bin\Release\net8.0\VsMcp.StdioProxy.exe',
+          'src\VsMcp.StdioProxy\bin\Release\net8.0\VsMcp.StdioProxy.deps.json',
+          'src\VsMcp.StdioProxy\bin\Release\net8.0\VsMcp.StdioProxy.runtimeconfig.json',
+          'src\VsMcp.StdioProxy\bin\Release\net8.0\VsMcp.Shared.dll',
+          'src\VsMcp.StdioProxy\bin\Release\net8.0\Newtonsoft.Json.dll' `
     -Destination "$env:LOCALAPPDATA\VsMcp\bin\" -Force
 ```
 

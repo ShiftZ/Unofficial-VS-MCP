@@ -43,6 +43,7 @@ namespace VsMcp.Extension.Tools
             { "find_in_files", "Editor" },
             // Debugger
             { "debug_start", "Debugger" },
+            { "debug_start_wait_break", "Debugger" },
             { "debug_stop", "Debugger" },
             { "debug_restart", "Debugger" },
             { "debug_attach", "Debugger" },

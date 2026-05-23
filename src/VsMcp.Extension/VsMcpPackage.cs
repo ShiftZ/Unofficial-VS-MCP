@@ -196,21 +196,6 @@ namespace VsMcp.Extension
 
                 Directory.CreateDirectory(proxyTargetDir);
 
-                var sourceExe = Path.Combine(proxySourceDir, "VsMcp.StdioProxy.exe");
-                var targetExe = Path.Combine(proxyTargetDir, "VsMcp.StdioProxy.exe");
-
-                // Skip if target is already up to date
-                if (File.Exists(sourceExe) && File.Exists(targetExe))
-                {
-                    var sourceVer = FileVersionInfo.GetVersionInfo(sourceExe);
-                    var targetVer = FileVersionInfo.GetVersionInfo(targetExe);
-                    if (sourceVer.FileVersion == targetVer.FileVersion)
-                    {
-                        Debug.WriteLine("[VsMcp] StdioProxy already up to date");
-                        return;
-                    }
-                }
-
                 foreach (var file in Directory.GetFiles(proxySourceDir))
                 {
                     var destFile = Path.Combine(proxyTargetDir, Path.GetFileName(file));
