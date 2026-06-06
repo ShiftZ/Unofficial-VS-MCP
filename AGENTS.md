@@ -55,7 +55,22 @@ Copy-Item 'src\VsMcp.StdioProxy\bin\Release\net8.0\VsMcp.StdioProxy.dll',
     -Destination "$env:LOCALAPPDATA\VsMcp\bin\" -Force
 ```
 
-When installing a rebuilt VSIX with `VSIXInstaller.exe`, do not use `/norestart`. That option is common for other Windows installers, but this VSIXInstaller version does not support it and reports `VSIXInstaller.InvalidCommandLineException` in the log, even if the process exits with code 0. Check the `%TEMP%\dd_VSIXInstaller_*.log` file after install/uninstall attempts; the exit code alone is not reliable. Use documented options such as `/quiet`, `/shutdownprocesses`, and `/instanceIds:<id>` only after confirming they appear in `VSIXInstaller.exe /?`.
+When installing a rebuilt VSIX with `VSIXInstaller.exe`, do not use `/norestart`.
+`VSIXInstaller.exe /?` does not print help to stdout; it opens a message box instead.
+For CLI-readable diagnostics, check the `%TEMP%\dd_VSIXInstaller_*.log` file after install/uninstall/help attempts;
+The exit code of the tool is not reliable.
+
+Observed usage shape:
+
+```text
+VSIXInstaller.exe [/quiet] [/norepair] [/admin] [/prerequisitesRequired] [/force] [/shutdownprocesses] [/noextensionpack] [/instanceIds:instanceIds] [/appIdInstallPath:path] [/appIdName:name] [/skuName:name /skuVersion:version] [/logFile:filename] </uninstall:vsixID | /downgrade:vsixID | vsix_path>
+```
+
+Generic command to install this plugin into a specific Visual Studio instance:
+
+```powershell
+VSIXInstaller.exe /quiet /shutdownprocesses /instanceIds:<instanceId> /logFile:VsMcp_VSIXInstaller.log .\src\VsMcp.Extension\VsMcp.Extension.vsix
+```
 
 ## StdioProxy Offline Response Architecture
 
