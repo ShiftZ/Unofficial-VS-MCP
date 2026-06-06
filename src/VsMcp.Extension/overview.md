@@ -20,6 +20,9 @@ VS MCP Server exposes tools across the following categories:
 ### Editor
 - Open/close/read/write/edit files, get active document info, search in files
 
+### Code Intelligence
+- Find C++ and C# symbol declarations with structured file/line/column results without navigating the IDE
+
 ### Debugger
 - Start/stop/restart debugging, attach to processes, step over/into/out, get call stack, locals, threads, evaluate expressions
 

@@ -6,7 +6,6 @@ namespace VsMcp.Shared
 {
     public enum ToolCategory
     {
-        All,
         General,
         Solution,
         Project,
@@ -32,6 +31,8 @@ namespace VsMcp.Shared
         Test,
         NuGet,
         Navigation,
+        CppCode,
+        CSharpCode,
         SolutionExplorer,
         Other
     }
@@ -176,6 +177,10 @@ namespace VsMcp.Shared
             { "code_goto_definition", ToolCategory.Navigation },
             { "code_find_references", ToolCategory.Navigation },
             { "code_goto_implementation", ToolCategory.Navigation },
+            // C++ code intelligence
+            { "cpp_find_symbol", ToolCategory.CppCode },
+            // C# code intelligence
+            { "csharp_find_symbol", ToolCategory.CSharpCode },
             // SolutionExplorer
             { "solution_add_project", ToolCategory.SolutionExplorer },
             { "solution_remove_project", ToolCategory.SolutionExplorer },
@@ -217,15 +222,53 @@ namespace VsMcp.Shared
             ToolCategory.Test,
             ToolCategory.NuGet,
             ToolCategory.Navigation,
+            ToolCategory.CppCode,
+            ToolCategory.CSharpCode,
             ToolCategory.SolutionExplorer,
             ToolCategory.Other
         };
 
-        public static string[] GetCategoryNames(bool includeAll = false)
+        public static readonly Dictionary<ToolCategory, string> CategoryDescriptions = new Dictionary<ToolCategory, string>
+        {
+            { ToolCategory.General, "Server help, Visual Studio status, and fallback command execution." },
+            { ToolCategory.Solution, "Open, close, and inspect the current solution." },
+            { ToolCategory.Project, "List projects and inspect project metadata." },
+            { ToolCategory.Build, "Build, clean, rebuild, configure, and inspect build errors." },
+            { ToolCategory.Editor, "Open, close, read, write, edit, and search files." },
+            { ToolCategory.EditPreview, "Preview file edits in Visual Studio before applying them." },
+            { ToolCategory.Debugger, "Start, stop, attach, step, inspect stack frames, locals, threads, and expressions." },
+            { ToolCategory.Breakpoint, "Set, remove, list, enable, and disable breakpoints." },
+            { ToolCategory.Watch, "Manage persistent debugger watch expressions." },
+            { ToolCategory.Thread, "Switch, freeze, thaw, and inspect debugged threads." },
+            { ToolCategory.Process, "List, attach to, detach from, and terminate debugged processes." },
+            { ToolCategory.Immediate, "Run side-effecting Immediate Window expressions in break mode." },
+            { ToolCategory.Module, "List modules loaded in the current debug session." },
+            { ToolCategory.Register, "Read CPU registers in native or mixed-mode debugging." },
+            { ToolCategory.Exception, "Read and modify debugger exception break settings." },
+            { ToolCategory.Memory, "Read raw memory or variable bytes while debugging." },
+            { ToolCategory.Parallel, "Inspect parallel stacks, per-thread values, and task information." },
+            { ToolCategory.Diagnostics, "Collect diagnostic signals such as XAML binding errors." },
+            { ToolCategory.Output, "Read, write, clear Output panes and inspect the Error List." },
+            { ToolCategory.Console, "Read and send input to a debugged console application." },
+            { ToolCategory.Web, "Connect to browser debugging, inspect DOM, console, network, and execute JavaScript." },
+            { ToolCategory.UI, "Inspect, capture, wait for, and interact with debugged desktop app UI." },
+            { ToolCategory.Test, "Discover, run, and inspect tests." },
+            { ToolCategory.NuGet, "List, search, install, update, and uninstall NuGet packages." },
+            { ToolCategory.Navigation, "Use IDE navigation commands for definitions, implementations, and references." },
+            { ToolCategory.CppCode, "Inspect C++ code symbols without navigating the IDE." },
+            { ToolCategory.CSharpCode, "Inspect C# code symbols without navigating the IDE." },
+            { ToolCategory.SolutionExplorer, "Modify solution and project structure in Solution Explorer." },
+            { ToolCategory.Other, "Tools that do not fit a more specific category." }
+        };
+
+        public static string GetCategoryDescription(ToolCategory category)
+        {
+            return CategoryDescriptions.TryGetValue(category, out var description) ? description : "";
+        }
+
+        public static string[] GetCategoryNames()
         {
             var names = CategoryOrder.Select(category => category.ToString());
-            if (includeAll)
-                names = new[] { ToolCategory.All.ToString() }.Concat(names);
             return names.ToArray();
         }
 
@@ -245,6 +288,7 @@ namespace VsMcp.Shared
                     ToolCategory.General, ToolCategory.Solution, ToolCategory.Project,
                     ToolCategory.Build, ToolCategory.Editor, ToolCategory.EditPreview,
                     ToolCategory.Output, ToolCategory.Navigation, ToolCategory.NuGet,
+                    ToolCategory.CppCode, ToolCategory.CSharpCode,
                     ToolCategory.SolutionExplorer, ToolCategory.Test
                 }
             },
@@ -291,7 +335,7 @@ namespace VsMcp.Shared
                     foreach (var cat in cats)
                         allowedCategories.Add(cat);
                 }
-                else if (TryParseCategory(part, out var category) && category != ToolCategory.All)
+                else if (TryParseCategory(part, out var category))
                 {
                     allowedCategories.Add(category);
                 }

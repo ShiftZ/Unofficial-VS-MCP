@@ -66,10 +66,11 @@ Observed usage shape:
 VSIXInstaller.exe [/quiet] [/norepair] [/admin] [/prerequisitesRequired] [/force] [/shutdownprocesses] [/noextensionpack] [/instanceIds:instanceIds] [/appIdInstallPath:path] [/appIdName:name] [/skuName:name /skuVersion:version] [/logFile:filename] </uninstall:vsixID | /downgrade:vsixID | vsix_path>
 ```
 
-Generic command to install this plugin into a specific Visual Studio instance:
+For local redeploys, uninstall the existing extension first, then install the rebuilt VSIX into the specific Visual Studio instance:
 
 ```powershell
-VSIXInstaller.exe /quiet /shutdownprocesses /instanceIds:<instanceId> /logFile:VsMcp_VSIXInstaller.log .\src\VsMcp.Extension\VsMcp.Extension.vsix
+VSIXInstaller.exe /quiet /shutdownprocesses /instanceIds:<instanceId> /logFile:<uninstallLogPath> /uninstall:<extensionId>
+VSIXInstaller.exe /quiet /force /shutdownprocesses /instanceIds:<instanceId> /logFile:<installLogPath> <vsixPath>
 ```
 
 ## StdioProxy Offline Response Architecture

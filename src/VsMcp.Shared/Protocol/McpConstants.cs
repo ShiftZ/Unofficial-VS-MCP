@@ -1,3 +1,5 @@
+using System.Linq;
+
 namespace VsMcp.Shared.Protocol
 {
     public static class McpConstants
@@ -27,11 +29,17 @@ namespace VsMcp.Shared.Protocol
 
         public static string GetInstructions()
         {
-            var categories = string.Join(", ", VsMcp.Shared.ToolCategoryMap.GetCategoryNames());
+            var categories = string.Join(
+                System.Environment.NewLine,
+                VsMcp.Shared.ToolCategoryMap.CategoryOrder.Select(category =>
+                    $"{category} - {VsMcp.Shared.ToolCategoryMap.GetCategoryDescription(category)}"));
+
             return "You are connected to vs-mcp, an MCP server for Visual Studio. "
-                + "Call get_status at least once before acting to verify that Visual Studio is running, the needed solution is open, and to learn the current debugger mode. "
+                + "Call get_status at least once before acting to verify that Visual Studio is running, the needed solution is open, to learn the current debugger mode, and to see the languages used by the open solution. "
                 + "Call get_help with no arguments to list all tools, or pass multiple categories (e.g. {\"categories\":[\"Build\",\"Debugger\"]}) to list tools under those categories. "
-                + $"Available categories: {categories}.";
+                + "Available categories:"
+                + System.Environment.NewLine
+                + categories;
         }
     }
 }

@@ -34,6 +34,12 @@ namespace VsMcp.Extension.Services
             return _dte;
         }
 
+        public async Task<object> GetServiceAsync(Type serviceType)
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            return await _package.GetServiceAsync(serviceType);
+        }
+
         /// <summary>
         /// Executes an action on the UI thread and returns the result.
         /// All EnvDTE calls must go through this method.

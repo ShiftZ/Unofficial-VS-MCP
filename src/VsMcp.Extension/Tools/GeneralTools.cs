@@ -38,7 +38,7 @@ namespace VsMcp.Extension.Tools
                     "get_help",
                     "Get available vs-mcp tools with descriptions. Omit categories to list all tools, or pass multiple categories (e.g. {\"categories\":[\"Build\",\"Debugger\"]}) to list tools under those categories.",
                     SchemaBuilder.Create()
-                        .AddEnumArray("categories", "Tool categories to list. Omit for All, or pass one or more category names.", ToolCategoryMap.GetCategoryNames(includeAll: true), defaultValue: new[] { ToolCategory.All.ToString() })
+                        .AddEnumArray("categories", "Tool categories to list. Omit to list all tools, or pass one or more category names.", ToolCategoryMap.GetCategoryNames())
                         .Build()),
                 args => GetHelpAsync(registry, args));
         }
@@ -63,13 +63,7 @@ namespace VsMcp.Extension.Tools
                 foreach (var categoryName in categoryNames)
                 {
                     if (!ToolCategoryMap.TryParseCategory(categoryName, out var parsedCategory))
-                        return Task.FromResult(McpToolResult.Error($"Unknown category '{categoryName}'. Valid categories: {string.Join(", ", ToolCategoryMap.GetCategoryNames(includeAll: true))}"));
-
-                    if (parsedCategory == ToolCategory.All)
-                    {
-                        requestedCategories.Clear();
-                        break;
-                    }
+                        return Task.FromResult(McpToolResult.Error($"Unknown category '{categoryName}'. Valid categories: {string.Join(", ", ToolCategoryMap.GetCategoryNames())}"));
 
                     requestedCategories.Add(parsedCategory);
                 }
@@ -107,12 +101,12 @@ namespace VsMcp.Extension.Tools
             return Task.FromResult(McpToolResult.Success(new
             {
                 requestedCategories = includeAll
-                    ? new[] { ToolCategory.All.ToString() }
+                    ? Array.Empty<string>()
                     : ToolCategoryMap.CategoryOrder
                         .Where(category => requestedCategories.Contains(category))
                         .Select(category => category.ToString())
                         .ToArray(),
-                availableCategories = ToolCategoryMap.GetCategoryNames(includeAll: true),
+                availableCategories = ToolCategoryMap.GetCategoryNames(),
                 totalTools = categorized.Values.Sum(tools => tools.Count),
                 categories = ordered,
                 guidelines = new
@@ -184,6 +178,14 @@ namespace VsMcp.Extension.Tools
                 }
                 catch { }
 
+                var languages = Array.Empty<string>();
+                try
+                {
+                    if (dte.Solution != null && !string.IsNullOrEmpty(dte.Solution.FullName))
+                        languages = ProjectModelHelpers.GetSolutionLanguages(dte.Solution.Projects);
+                }
+                catch { }
+
                 var debugMode = "Design";
                 try
                 {
@@ -207,9 +209,9 @@ namespace VsMcp.Extension.Tools
                     solution = new { name = solutionName, path = solutionPath, isOpen },
                     solutionState = VsMcpPackage.SolutionState,
                     activeDocument = activeDoc,
+                    languages,
                     debuggerMode = debugMode,
-                    vsVersion = dte.Version,
-                    vsEdition = dte.Edition
+                    vsVersion = dte.Version
                 });
             });
         }

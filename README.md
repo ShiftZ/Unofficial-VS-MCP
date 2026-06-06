@@ -27,6 +27,8 @@ VS MCP Server exposes tools across the following categories:
 | Web | Browser automation via Chrome CDP and Firefox RDP, including navigation, DOM, console, network, screenshots |
 | Test | Discover, run, and view test results |
 | NuGet | Search, install, update, remove NuGet packages |
+| CppCode | Inspect C++ code symbols without navigating the IDE |
+| CSharpCode | Inspect C# code symbols without navigating the IDE |
 | Advanced Debug | Watch, thread/process management, immediate window, registers, memory, parallel stacks |
 
 ### Tool Details
@@ -36,8 +38,8 @@ VS MCP Server exposes tools across the following categories:
 | Tool | Description |
 |------|-------------|
 | `execute_command` | Execute a Visual Studio command by name |
-| `get_status` | Get the current Visual Studio status including solution state, active document, and debugger mode |
-| `get_help` | Get available vs-mcp tools with descriptions. Accepts `categories`, an optional array of one or more category names, for example `["Build", "Debugger"]`. Omit it or pass `["All"]` to list all tools. |
+| `get_status` | Get the current Visual Studio status including solution state, active document, solution languages, and debugger mode |
+| `get_help` | Get available vs-mcp tools with descriptions. Accepts `categories`, an optional array of one or more category names, for example `["Build", "Debugger"]`. Omit it to list all tools. |
 
 #### Solution
 
@@ -93,6 +95,18 @@ VS MCP Server exposes tools across the following categories:
 | `code_goto_definition` | Navigate to the definition of a symbol at the specified position |
 | `code_find_references` | Find all references of a symbol at the specified position |
 | `code_goto_implementation` | Navigate to the implementation of an interface or abstract member |
+
+#### CppCode
+
+| Tool | Description |
+|------|-------------|
+| `cpp_find_symbol` | Find C++ source declarations by symbol name and return structured locations without navigating the IDE |
+
+#### CSharpCode
+
+| Tool | Description |
+|------|-------------|
+| `csharp_find_symbol` | Find C# source declarations by symbol name and return structured locations without navigating the IDE |
 
 #### Solution Explorer
 
@@ -377,7 +391,7 @@ Use the `--tools` argument to load only the tool categories you need. This reduc
 
 | Preset | Categories |
 |--------|------------|
-| `core` | General, Solution, Project, Build, Editor, EditPreview, Output, Navigation, NuGet, SolutionExplorer, Test |
+| `core` | General, Solution, Project, Build, Editor, EditPreview, Output, Navigation, NuGet, CppCode, CSharpCode, SolutionExplorer, Test |
 | `debug` | Debugger, Breakpoint, Watch, Thread, Process, Immediate, Module, Register, Exception, Memory, Parallel, Diagnostics, Console |
 | `web` | Web |
 | `ui` | UI |
