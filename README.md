@@ -123,7 +123,7 @@ VS MCP Server exposes tools across the following categories:
 | `debug_get_locals` | Get the local variables in the current stack frame |
 | `debug_get_threads` | Get all threads in the current debug session |
 | `debug_get_mode` | Get the current debugger mode (Design, Running, or Break) |
-| `debugger_wait_break` | Wait for a debugger break or debug-session stop using VS debugger events |
+| `debug_wait_break` | Wait for a debugger break or debug-session stop using VS debugger events |
 | `debug_evaluate` | Evaluate an expression in the current debug context (only works in break mode) |
 
 #### Breakpoint

@@ -31,7 +31,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "debug_start_wait_break",
-                    "F5: start the startup project WITH the debugger attached, then wait until the debugger breaks/stops or time_out expires. Starts only from Design mode; otherwise leaves the current debug session untouched. Equivalent to debug_start followed by debugger_wait_break.",
+                    "F5: start the startup project WITH the debugger attached, then wait until the debugger breaks/stops or time_out expires. Starts only from Design mode; otherwise leaves the current debug session untouched. Equivalent to debug_start followed by debug_wait_break.",
                     SchemaBuilder.Create()
                         .AddInteger("time_out", "Timeout in milliseconds", required: true)
                         .Build()),
@@ -132,13 +132,13 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
-                    "debugger_wait_break",
+                    "debug_wait_break",
                     "Wait until the debugger stops or the timeout expires. This is event-driven: it listens for VS debugger break/design-mode events, does not continue execution, and returns the stop reason plus current break context when available. The time_out parameter is in milliseconds.",
                     SchemaBuilder.Create()
                         .AddInteger("time_out", "Timeout in milliseconds", required: true)
                         .Build()),
-                args => DebuggerWaitBreakAsync(accessor, args),
-                GetDebuggerWaitBreakTimeout);
+                args => DebugWaitBreakAsync(accessor, args),
+                GetDebugWaitBreakTimeout);
 
             registry.Register(
                 new McpToolDefinition(
@@ -184,7 +184,7 @@ namespace VsMcp.Extension.Tools
             if (startResult.Signal.Status == "timeout")
                 return await CreateDebuggerSignalResultAsync(accessor, startResult.Signal, startResult.ElapsedMs);
 
-            return await DebuggerWaitBreakAsync(accessor, args);
+            return await DebugWaitBreakAsync(accessor, args);
         }
 
         private static async Task<DebuggerWaitResult> DebugStartAndWaitRunAsync(VsServiceAccessor accessor)
@@ -665,7 +665,7 @@ namespace VsMcp.Extension.Tools
             });
         }
 
-        private static async Task<McpToolResult> DebuggerWaitBreakAsync(VsServiceAccessor accessor, JObject args)
+        private static async Task<McpToolResult> DebugWaitBreakAsync(VsServiceAccessor accessor, JObject args)
         {
             var timeoutMs = args.Value<int?>("time_out");
             if (!timeoutMs.HasValue || timeoutMs.Value <= 0)
@@ -829,7 +829,7 @@ namespace VsMcp.Extension.Tools
             return McpToolResult.Success(result);
         }
 
-        private static TimeSpan GetDebuggerWaitBreakTimeout(JObject args)
+        private static TimeSpan GetDebugWaitBreakTimeout(JObject args)
         {
             var timeoutMs = args.Value<int?>("time_out");
             if (!timeoutMs.HasValue || timeoutMs.Value <= 0)
@@ -843,7 +843,7 @@ namespace VsMcp.Extension.Tools
 
         private static TimeSpan GetDebugStartWaitBreakTimeout(JObject args)
         {
-            var waitBreakTimeout = GetDebuggerWaitBreakTimeout(args);
+            var waitBreakTimeout = GetDebugWaitBreakTimeout(args);
             var totalMs = Math.Min(
                 (long)waitBreakTimeout.TotalMilliseconds + (long)DebugStartModeChangeTimeout.TotalMilliseconds,
                 int.MaxValue);

@@ -85,7 +85,7 @@ namespace VsMcp.Shared
             { "debug_get_locals", ToolCategory.Debugger },
             { "debug_get_threads", ToolCategory.Debugger },
             { "debug_get_mode", ToolCategory.Debugger },
-            { "debugger_wait_break", ToolCategory.Debugger },
+            { "debug_wait_break", ToolCategory.Debugger },
             { "debug_evaluate", ToolCategory.Debugger },
             // Breakpoint
             { "breakpoint_set", ToolCategory.Breakpoint },
