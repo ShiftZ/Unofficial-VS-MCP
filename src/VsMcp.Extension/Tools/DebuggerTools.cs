@@ -30,6 +30,16 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "debug_wait_break",
+                    "Wait until the debugger stops or the timeout expires. This is event-driven: it listens for VS debugger break/design-mode events, does not continue execution, and returns the stop reason plus current break context when available. The time_out parameter is in milliseconds.",
+                    SchemaBuilder.Create()
+                        .AddInteger("time_out", "Timeout in milliseconds", required: true)
+                        .Build()),
+                args => DebugWaitBreakAsync(accessor, args),
+                GetDebugWaitBreakTimeout);
+
+            registry.Register(
+                new McpToolDefinition(
                     "debug_start_wait_break",
                     "F5: start the startup project WITH the debugger attached, then wait until the debugger breaks/stops or time_out expires. Starts only from Design mode; otherwise leaves the current debug session untouched. Equivalent to debug_start followed by debug_wait_break.",
                     SchemaBuilder.Create()
@@ -129,16 +139,6 @@ namespace VsMcp.Extension.Tools
                     "Get the current debugger mode (Design, Running, or Break)",
                     SchemaBuilder.Empty()),
                 args => DebugGetModeAsync(accessor));
-
-            registry.Register(
-                new McpToolDefinition(
-                    "debug_wait_break",
-                    "Wait until the debugger stops or the timeout expires. This is event-driven: it listens for VS debugger break/design-mode events, does not continue execution, and returns the stop reason plus current break context when available. The time_out parameter is in milliseconds.",
-                    SchemaBuilder.Create()
-                        .AddInteger("time_out", "Timeout in milliseconds", required: true)
-                        .Build()),
-                args => DebugWaitBreakAsync(accessor, args),
-                GetDebugWaitBreakTimeout);
 
             registry.Register(
                 new McpToolDefinition(

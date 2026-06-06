@@ -72,6 +72,7 @@ namespace VsMcp.Shared
             { "find_in_files", ToolCategory.Editor },
             // Debugger
             { "debug_start", ToolCategory.Debugger },
+            { "debug_wait_break", ToolCategory.Debugger },
             { "debug_start_wait_break", ToolCategory.Debugger },
             { "debug_start_without_debugging", ToolCategory.Debugger },
             { "debug_stop", ToolCategory.Debugger },
@@ -85,7 +86,6 @@ namespace VsMcp.Shared
             { "debug_get_locals", ToolCategory.Debugger },
             { "debug_get_threads", ToolCategory.Debugger },
             { "debug_get_mode", ToolCategory.Debugger },
-            { "debug_wait_break", ToolCategory.Debugger },
             { "debug_evaluate", ToolCategory.Debugger },
             // Breakpoint
             { "breakpoint_set", ToolCategory.Breakpoint },
