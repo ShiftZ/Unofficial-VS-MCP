@@ -75,6 +75,29 @@ namespace VsMcp.Shared
             return this;
         }
 
+        public SchemaBuilder AddEnumArray(string name, string description, string[] values, bool required = false, string[] defaultValue = null)
+        {
+            var prop = new JObject
+            {
+                ["type"] = "array",
+                ["description"] = description,
+                ["items"] = new JObject
+                {
+                    ["type"] = "string",
+                    ["enum"] = new JArray(values)
+                },
+                ["uniqueItems"] = true,
+                ["minItems"] = 1
+            };
+            if (defaultValue != null)
+                prop["default"] = new JArray(defaultValue);
+
+            _properties[name] = prop;
+            if (required)
+                _required.Add(name);
+            return this;
+        }
+
         public JObject Build()
         {
             var schema = new JObject

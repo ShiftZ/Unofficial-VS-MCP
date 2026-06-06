@@ -30,8 +30,7 @@ namespace VsMcp.Shared.Protocol
             var categories = string.Join(", ", VsMcp.Shared.ToolCategoryMap.GetCategoryNames());
             return "You are connected to vs-mcp, an MCP server for Visual Studio. "
                 + "Call get_status at least once before acting to verify that Visual Studio is running, the needed solution is open, and to learn the current debugger mode. "
-                + "Call get_help with no arguments or category='All' to list all tools. "
-                + "Call get_help with a category parameter to list tools under one category. "
+                + "Call get_help with no arguments to list all tools, or pass multiple categories (e.g. {\"categories\":[\"Build\",\"Debugger\"]}) to list tools under those categories. "
                 + $"Available categories: {categories}.";
         }
     }

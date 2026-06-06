@@ -37,7 +37,7 @@ VS MCP Server exposes tools across the following categories:
 |------|-------------|
 | `execute_command` | Execute a Visual Studio command by name |
 | `get_status` | Get the current Visual Studio status including solution state, active document, and debugger mode |
-| `get_help` | Get a categorized list of all available vs-mcp tools with descriptions |
+| `get_help` | Get available vs-mcp tools with descriptions. Accepts `categories`, an optional array of one or more category names, for example `["Build", "Debugger"]`. Omit it or pass `["All"]` to list all tools. |
 
 #### Solution
 

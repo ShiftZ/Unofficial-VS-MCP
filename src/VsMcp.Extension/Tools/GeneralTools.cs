@@ -36,30 +36,53 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "get_help",
-                    "Get available vs-mcp tools with descriptions. Omit category or use category='All' for every category, or pass one category to list only tools under that category.",
+                    "Get available vs-mcp tools with descriptions. Omit categories to list all tools, or pass multiple categories (e.g. {\"categories\":[\"Build\",\"Debugger\"]}) to list tools under those categories.",
                     SchemaBuilder.Create()
-                        .AddEnum("category", "Tool category to list. Defaults to All.", ToolCategoryMap.GetCategoryNames(includeAll: true), defaultValue: ToolCategory.All.ToString())
+                        .AddEnumArray("categories", "Tool categories to list. Omit for All, or pass one or more category names.", ToolCategoryMap.GetCategoryNames(includeAll: true), defaultValue: new[] { ToolCategory.All.ToString() })
                         .Build()),
                 args => GetHelpAsync(registry, args));
         }
 
         private static Task<McpToolResult> GetHelpAsync(McpToolRegistry registry, JObject args)
         {
-            var requestedCategory = ToolCategory.All;
-            var categoryArg = args.Value<string>("category");
-            if (!string.IsNullOrWhiteSpace(categoryArg))
+            var requestedCategories = new HashSet<ToolCategory>();
+            var categoriesArg = args["categories"];
+            if (categoriesArg != null)
             {
-                if (!ToolCategoryMap.TryParseCategory(categoryArg, out requestedCategory))
-                    return Task.FromResult(McpToolResult.Error($"Unknown category '{categoryArg}'. Valid categories: {string.Join(", ", ToolCategoryMap.GetCategoryNames(includeAll: true))}"));
+                if (categoriesArg.Type != JTokenType.Array)
+                    return Task.FromResult(McpToolResult.Error("Parameter 'categories' must be an array of category names."));
+
+                var categoryNames = categoriesArg.Values<string>()
+                    .Where(category => !string.IsNullOrWhiteSpace(category))
+                    .Select(category => category.Trim())
+                    .ToList();
+
+                if (categoryNames.Count == 0)
+                    return Task.FromResult(McpToolResult.Error("Parameter 'categories' must include at least one category name."));
+
+                foreach (var categoryName in categoryNames)
+                {
+                    if (!ToolCategoryMap.TryParseCategory(categoryName, out var parsedCategory))
+                        return Task.FromResult(McpToolResult.Error($"Unknown category '{categoryName}'. Valid categories: {string.Join(", ", ToolCategoryMap.GetCategoryNames(includeAll: true))}"));
+
+                    if (parsedCategory == ToolCategory.All)
+                    {
+                        requestedCategories.Clear();
+                        break;
+                    }
+
+                    requestedCategories.Add(parsedCategory);
+                }
             }
 
+            var includeAll = requestedCategories.Count == 0;
             var allTools = registry.GetAllDefinitions();
             var categorized = new Dictionary<ToolCategory, List<object>>();
 
             foreach (var tool in allTools)
             {
                 var category = ToolCategoryMap.ToolToCategory.TryGetValue(tool.Name, out var cat) ? cat : ToolCategory.Other;
-                if (requestedCategory != ToolCategory.All && category != requestedCategory)
+                if (!includeAll && !requestedCategories.Contains(category))
                     continue;
 
                 if (!categorized.ContainsKey(category))
@@ -83,7 +106,12 @@ namespace VsMcp.Extension.Tools
 
             return Task.FromResult(McpToolResult.Success(new
             {
-                category = requestedCategory.ToString(),
+                requestedCategories = includeAll
+                    ? new[] { ToolCategory.All.ToString() }
+                    : ToolCategoryMap.CategoryOrder
+                        .Where(category => requestedCategories.Contains(category))
+                        .Select(category => category.ToString())
+                        .ToArray(),
                 availableCategories = ToolCategoryMap.GetCategoryNames(includeAll: true),
                 totalTools = categorized.Values.Sum(tools => tools.Count),
                 categories = ordered,
