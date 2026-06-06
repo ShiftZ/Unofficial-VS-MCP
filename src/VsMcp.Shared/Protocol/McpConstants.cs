@@ -25,21 +25,14 @@ namespace VsMcp.Shared.Protocol
         public const string PortFileSuffix = ".port";
         public const string PortFileFolder = "VsMcp";
 
-        public static string GetInstructions(int toolCount)
+        public static string GetInstructions()
         {
-            return $"You are connected to vs-mcp, a Visual Studio automation server with {toolCount} tools. "
-                + "Use get_status only when you need combined solution, active document, and debugger context before acting. "
-                + "Use MCP tools instead of CLI: build_solution (not MSBuild), debug_start (not F5), output_read (not manual reads). "
-                + "Call get_help for a categorized tool list with usage guidelines. "
-                + "WRONG SOLUTION: If a status or solution check shows a different solution, ask the user how to proceed. "
-                + "SOLUTION FILES: Never guess .sln names; verify with Glob first. "
-                + "FALLBACK: If VS is busy, use 'dotnet build' as CLI fallback. "
-                + "OFFLINE MODE: If a tool returns 'Visual Studio is not running', the error lists detected installations. "
-                + "Ask user which to start, then use PowerShell Start-Process. Wait 30s, then retry. "
-                + "If the error says 'no instance has <sln> open', VS is running but with a different solution. "
-                + "Ask the user to open the correct solution in VS, then retry. "
-                + "DEBUG_EVALUATE: After calling debug_evaluate, ALWAYS display the result to the user in your response text (e.g., 'expression = value (type)'). "
-                + "The result is also written to the VsMcp Output pane in Visual Studio.";
+            var categories = string.Join(", ", VsMcp.Shared.ToolCategoryMap.GetCategoryNames());
+            return "You are connected to vs-mcp, an MCP server for Visual Studio. "
+                + "Call get_status at least once before acting to verify that Visual Studio is running, the needed solution is open, and to learn the current debugger mode. "
+                + "Call get_help with no arguments or category='All' to list all tools. "
+                + "Call get_help with a category parameter to list tools under one category. "
+                + $"Available categories: {categories}.";
         }
     }
 }

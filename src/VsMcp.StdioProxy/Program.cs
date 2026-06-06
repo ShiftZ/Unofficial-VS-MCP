@@ -325,8 +325,7 @@ namespace VsMcp.StdioProxy
 
         private static string BuildInitializeResponse(JToken id)
         {
-            var toolCount = GetFilteredToolCount();
-            var instructions = McpConstants.GetInstructions(toolCount);
+            var instructions = McpConstants.GetInstructions();
 
             if (_discoveredSlnCandidates != null && _discoveredSlnCandidates.Count > 1)
             {
@@ -423,13 +422,6 @@ namespace VsMcp.StdioProxy
                     filtered.Add(tool);
             }
             result["tools"] = filtered;
-        }
-
-        private static int GetFilteredToolCount()
-        {
-            if (_toolFilter != null)
-                return _toolFilter.Count;
-            return ToolDefinitionCache.GetToolCount();
         }
 
         private static string BuildOfflineStderrMessage()

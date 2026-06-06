@@ -62,25 +62,5 @@ namespace VsMcp.Shared
             }
         }
 
-        /// <summary>
-        /// Returns the number of tools in the cache, or 0 if cache is unavailable.
-        /// </summary>
-        public static int GetToolCount()
-        {
-            try
-            {
-                var json = ReadAsJson();
-                if (json == null)
-                    return 0;
-
-                var obj = JObject.Parse(json);
-                var tools = obj["tools"] as JArray;
-                return tools?.Count ?? 0;
-            }
-            catch
-            {
-                return 0;
-            }
-        }
     }
 }

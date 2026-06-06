@@ -14,7 +14,33 @@ This MCP server is a classic in-process Visual Studio extension. For MCP tools t
 - Editor/navigation automation: [DTE.ExecuteCommand](https://learn.microsoft.com/en-us/dotnet/api/envdte.dte.executecommand?view=visualstudiosdk-2022), [ItemOperations.OpenFile](https://learn.microsoft.com/en-us/dotnet/api/envdte.itemoperations.openfile?view=visualstudiosdk-2022), [TextSelection.MoveToLineAndOffset](https://learn.microsoft.com/en-us/dotnet/api/envdte.textselection.movetolineandoffset?view=visualstudiosdk-2022), and [Find references in your code](https://learn.microsoft.com/en-us/visualstudio/ide/finding-references?view=vs-2022). This is the route used for command-driven features like `Edit.GoToDefinition`, `Edit.GoToImplementation`, and `Edit.FindAllReferences`.
 - Programmatic symbol/reference analysis: [Workspace.CurrentSolution](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.workspace.currentsolution?view=roslyn-dotnet-4.14.0), [Solution](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.solution?view=roslyn-dotnet-4.14.0), and [SymbolFinder.FindReferencesAsync](https://learn.microsoft.com/en-us/dotnet/api/microsoft.codeanalysis.findsymbols.symbolfinder.findreferencesasync?view=roslyn-dotnet-4.14.0). Prefer Roslyn when an MCP tool needs structured reference results instead of only opening the Visual Studio Find All References window.
 
-## Notes on StdioProxy Deployment
+## Notes on Building the MCP Server
+
+To build the MCP server without touching the C++ sample test projects, build the server projects directly instead of building `Unoffcial-VS-MCP.sln`:
+
+```powershell
+dotnet build .\src\VsMcp.Extension\VsMcp.Extension.csproj -c Release
+dotnet build .\src\VsMcp.StdioProxy\VsMcp.StdioProxy.csproj -c Release
+```
+
+The extension project builds `VsMcp.Shared` as needed. Avoid `dotnet build .\Unoffcial-VS-MCP.sln` for this purpose because the solution includes C++ sample projects under `tests\cpp\`, and .NET MSBuild does not build those `.vcxproj` projects correctly.
+
+The `VsMcp.Extension.VS2019` project is the separate VS2019 compatibility VSIX. Its VSSDK packages intentionally stay on the VS2019-era 16.x line, including `Microsoft.VSSDK.BuildTools` 16.11.71. Do not "fix" its `CodeTaskFactory` failure by upgrading to 17.x casually; that can undermine VS2019 compatibility. `dotnet build` uses .NET Core MSBuild and fails during VSIX packaging because VSSDK BuildTools 16.x uses `CodeTaskFactory`, which .NET Core MSBuild does not support. Build the VS2019 package with Visual Studio/.NET Framework MSBuild instead, after restore:
+
+```powershell
+dotnet restore .\src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj
+MSBuild.exe .\src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj /p:Configuration=Release
+```
+
+If using the current VS2026 MSBuild install on this machine, set the SDK path first and do not use `/restore` on the MSBuild invocation:
+
+```powershell
+$env:MSBuildSDKsPath = 'C:\Program Files\dotnet\sdk\10.0.300\Sdks'
+$env:MSBuildEnableWorkloadResolver = 'false'
+MSBuild.exe .\src\VsMcp.Extension.VS2019\VsMcp.Extension.VS2019.csproj /p:Configuration=Release
+```
+
+## Notes on local Deployment
 
 `VsMcpPackage.DeployStdioProxy()` always copies the packaged StdioProxy files into `%LOCALAPPDATA%\VsMcp\bin\` when the extension loads.
 If Visual Studio is already running and you need the proxy updated immediately after a build, copy the Release output manually:
@@ -28,6 +54,8 @@ Copy-Item 'src\VsMcp.StdioProxy\bin\Release\net8.0\VsMcp.StdioProxy.dll',
           'src\VsMcp.StdioProxy\bin\Release\net8.0\Newtonsoft.Json.dll' `
     -Destination "$env:LOCALAPPDATA\VsMcp\bin\" -Force
 ```
+
+When installing a rebuilt VSIX with `VSIXInstaller.exe`, do not use `/norestart`. That option is common for other Windows installers, but this VSIXInstaller version does not support it and reports `VSIXInstaller.InvalidCommandLineException` in the log, even if the process exits with code 0. Check the `%TEMP%\dd_VSIXInstaller_*.log` file after install/uninstall attempts; the exit code alone is not reliable. Use documented options such as `/quiet`, `/shutdownprocesses`, and `/instanceIds:<id>` only after confirming they appear in `VSIXInstaller.exe /?`.
 
 ## StdioProxy Offline Response Architecture
 
@@ -74,3 +102,5 @@ When bumping the version, update the following 7 locations:
 ```powershell
 Remove-Item -Recurse -Force src\VsMcp.Extension\obj, src\VsMcp.Extension\bin, src\VsMcp.Extension.VS2019\obj, src\VsMcp.Extension.VS2019\bin
 ```
+
+The `VsMcp.Extension.VS2019` paths in that cleanup command are for the separate VS2019 compatibility VSIX package. They are not used by the VS2022+/VS2026 package, but keep them in version-bump cleanup when updating both packages so the VS2019 VSIX does not retain a stale generated manifest.

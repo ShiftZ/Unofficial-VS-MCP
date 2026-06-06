@@ -8,26 +8,26 @@
 
 ## Features
 
-VS MCP Server exposes **112 tools** across the following categories:
+VS MCP Server exposes tools across the following categories:
 
-| Category | Tools | Description |
-|----------|------:|-------------|
-| General | 3 | Execute VS commands, get IDE status, view tool help |
-| Solution & Project | 5 | Open/close solutions, list/inspect projects |
-| Build | 6 | Build solution/project, clean, rebuild, get build errors, switch configuration |
-| Editor | 7 | Open/close/read/write/edit files, find in files |
-| Edit Preview | 4 | Diff preview, approve/reject edits with VS diff viewer |
-| Code Navigation | 3 | Go to definition, find references, go to implementation |
-| Solution Explorer | 6 | Add/remove projects, files, and references |
-| Debugger | 14 | Start/stop/restart, attach, stepping, wait for stops, call stack, locals, threads, evaluate, run without debugging |
-| Breakpoints | 4 | Set/remove/list, enable/disable breakpoints |
-| Output & Diagnostics | 5 | Read/write/clear output panes, error list, XAML binding errors |
-| Console | 3 | Read console output, send input/keys, get console info for debugged apps |
-| UI Automation | 10 | Capture screenshots, inspect UI trees, find/click/right-click/drag/invoke elements |
-| Web | 12 | Browser automation via Chrome CDP and Firefox RDP — navigation, DOM, console, network, screenshots |
-| Test | 3 | Discover, run, and view test results |
-| NuGet | 5 | Search, install, update, remove NuGet packages |
-| Advanced Debug | 20 | Watch, thread/process management, immediate window, registers, memory, parallel stacks |
+| Category | Description |
+|----------|-------------|
+| General | Execute VS commands, get IDE status, view tool help |
+| Solution & Project | Open/close solutions, list/inspect projects |
+| Build | Build solution/project, clean, rebuild, get build errors, switch configuration |
+| Editor | Open/close/read/write/edit files, find in files |
+| Edit Preview | Diff preview, approve/reject edits with VS diff viewer |
+| Code Navigation | Go to definition, find references, go to implementation |
+| Solution Explorer | Add/remove projects, files, and references |
+| Debugger | Start/stop/restart, attach, stepping, wait for stops, call stack, locals, threads, evaluate, run without debugging |
+| Breakpoints | Set/remove/list, enable/disable breakpoints |
+| Output & Diagnostics | Read/write/clear output panes, error list, XAML binding errors |
+| Console | Read console output, send input/keys, get console info for debugged apps |
+| UI Automation | Capture screenshots, inspect UI trees, find/click/right-click/drag/invoke elements |
+| Web | Browser automation via Chrome CDP and Firefox RDP, including navigation, DOM, console, network, screenshots |
+| Test | Discover, run, and view test results |
+| NuGet | Search, install, update, remove NuGet packages |
+| Advanced Debug | Watch, thread/process management, immediate window, registers, memory, parallel stacks |
 
 ### Tool Details
 
@@ -110,6 +110,7 @@ VS MCP Server exposes **112 tools** across the following categories:
 | Tool | Description |
 |------|-------------|
 | `debug_start` | Start debugging the startup project (equivalent to F5) |
+| `debug_start_wait_break` | Start debugging and wait until the debugger breaks, stops, or times out |
 | `debug_start_without_debugging` | Start the startup project without the debugger attached (equivalent to Ctrl+F5) |
 | `debug_stop` | Stop debugging the current session |
 | `debug_restart` | Restart debugging the current session |
@@ -118,6 +119,7 @@ VS MCP Server exposes **112 tools** across the following categories:
 | `debug_continue` | Continue (resume) execution after a breakpoint or break |
 | `debug_step` | Step through code (direction: over, into, or out) |
 | `debug_get_callstack` | Get the current call stack of the active thread |
+| `debug_switch_frame` | Switch the current stack frame by frame index, optionally on a specific thread |
 | `debug_get_locals` | Get the local variables in the current stack frame |
 | `debug_get_threads` | Get all threads in the current debug session |
 | `debug_get_mode` | Get the current debugger mode (Design, Running, or Break) |
@@ -165,6 +167,7 @@ VS MCP Server exposes **112 tools** across the following categories:
 | `ui_double_click` | Double-click a UI element by AutomationId, Name, or screen coordinates |
 | `ui_right_click` | Right-click a UI element by AutomationId, Name, or screen coordinates |
 | `ui_drag` | Perform a drag-and-drop operation from start coordinates to end coordinates |
+| `ui_mouse_wheel` | Scroll the mouse wheel at a UI element or screen coordinate |
 | `ui_set_value` | Set the value of a UI element using ValuePattern |
 | `ui_invoke` | Invoke the default action on a UI element using InvokePattern |
 | `ui_send_keys` | Send keyboard input (shortcuts like `ctrl+f`, text typing) to the debugged application |
@@ -416,12 +419,6 @@ tools. They are deployed automatically on extension startup to
 Source files live under `src/VsMcp.Extension/Skills/`; edit them there and the
 extension will redeploy the updated copy on next launch (it compares file
 content and skips unchanged files).
-
-## Contributing
-
-**Pull Requests are not accepted.**
-
-For feature requests and bug reports, please use [GitHub Issues](https://github.com/dhq-boiler/Unofficial-VS-MCP/issues).
 
 ## License
 

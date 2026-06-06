@@ -58,7 +58,7 @@ namespace VsMcp.Shared
             return this;
         }
 
-        public SchemaBuilder AddEnum(string name, string description, string[] values, bool required = false)
+        public SchemaBuilder AddEnum(string name, string description, string[] values, bool required = false, string defaultValue = null)
         {
             var prop = new JObject
             {
@@ -66,6 +66,9 @@ namespace VsMcp.Shared
                 ["description"] = description,
                 ["enum"] = new JArray(values)
             };
+            if (defaultValue != null)
+                prop["default"] = defaultValue;
+
             _properties[name] = prop;
             if (required)
                 _required.Add(name);

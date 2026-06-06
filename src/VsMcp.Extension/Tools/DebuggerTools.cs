@@ -101,6 +101,16 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "debug_switch_frame",
+                    "Switch the current stack frame by frame index. Optionally switch to a thread first by thread ID. Use frameIndex values returned by debug_get_callstack or thread_get_callstack.",
+                    SchemaBuilder.Create()
+                        .AddInteger("frameIndex", "Zero-based frame index returned by debug_get_callstack or thread_get_callstack", required: true)
+                        .AddInteger("threadId", "Optional thread ID. When provided, switches to this thread before switching frames.")
+                        .Build()),
+                args => DebugSwitchFrameAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
                     "debug_get_locals",
                     "Get the local variables in the current stack frame",
                     SchemaBuilder.Empty()),
@@ -429,6 +439,7 @@ namespace VsMcp.Extension.Tools
 
                 var thread = dte.Debugger.CurrentThread;
                 var frames = new List<object>();
+                var frameIndex = 0;
 
                 foreach (StackFrame frame in thread.StackFrames)
                 {
@@ -436,6 +447,7 @@ namespace VsMcp.Extension.Tools
                     {
                         frames.Add(new
                         {
+                            frameIndex,
                             functionName = frame.FunctionName,
                             module = frame.Module,
                             fileName = DebugHelpers.TryGetFrameFileName(frame),
@@ -444,6 +456,8 @@ namespace VsMcp.Extension.Tools
                         });
                     }
                     catch { }
+
+                    frameIndex++;
                 }
 
                 return McpToolResult.Success(new
@@ -452,6 +466,74 @@ namespace VsMcp.Extension.Tools
                     threadName = thread.Name,
                     frameCount = frames.Count,
                     frames
+                });
+            });
+        }
+
+        private static async Task<McpToolResult> DebugSwitchFrameAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var frameIndex = args.Value<int?>("frameIndex");
+            if (!frameIndex.HasValue)
+                return McpToolResult.Error("Parameter 'frameIndex' is required");
+
+            if (frameIndex.Value < 0)
+                return McpToolResult.Error("Parameter 'frameIndex' must be zero or greater");
+
+            var threadId = args.Value<int?>("threadId");
+
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                if (dte.Debugger.CurrentMode != dbgDebugMode.dbgBreakMode)
+                    return McpToolResult.Error("Debugger must be in Break mode to switch frames");
+
+                Thread thread;
+                if (threadId.HasValue)
+                {
+                    thread = DebugHelpers.FindThread(dte.Debugger, threadId.Value);
+                    if (thread == null)
+                        return McpToolResult.Error($"Thread with ID {threadId.Value} not found");
+
+                    dte.Debugger.CurrentThread = thread;
+                }
+                else
+                {
+                    thread = dte.Debugger.CurrentThread;
+                    if (thread == null)
+                        return McpToolResult.Error("No current thread is available");
+                }
+
+                StackFrame targetFrame = null;
+                var currentIndex = 0;
+                foreach (StackFrame frame in thread.StackFrames)
+                {
+                    if (currentIndex == frameIndex.Value)
+                    {
+                        targetFrame = frame;
+                        break;
+                    }
+
+                    currentIndex++;
+                }
+
+                if (targetFrame == null)
+                    return McpToolResult.Error($"Frame index {frameIndex.Value} not found on thread {thread.ID}");
+
+                dte.Debugger.CurrentStackFrame = targetFrame;
+
+                return McpToolResult.Success(new
+                {
+                    message = $"Switched to frame {frameIndex.Value} on thread {thread.ID}",
+                    threadId = thread.ID,
+                    threadName = thread.Name,
+                    frameIndex = frameIndex.Value,
+                    functionName = targetFrame.FunctionName,
+                    module = targetFrame.Module,
+                    fileName = DebugHelpers.TryGetFrameFileName(targetFrame),
+                    line = DebugHelpers.TryGetFrameLine(targetFrame),
+                    language = targetFrame.Language
                 });
             });
         }

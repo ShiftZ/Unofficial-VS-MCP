@@ -4,184 +4,265 @@ using System.Linq;
 
 namespace VsMcp.Shared
 {
+    public enum ToolCategory
+    {
+        All,
+        General,
+        Solution,
+        Project,
+        Build,
+        Editor,
+        EditPreview,
+        Debugger,
+        Breakpoint,
+        Watch,
+        Thread,
+        Process,
+        Immediate,
+        Module,
+        Register,
+        Exception,
+        Memory,
+        Parallel,
+        Diagnostics,
+        Output,
+        Console,
+        Web,
+        UI,
+        Test,
+        NuGet,
+        Navigation,
+        SolutionExplorer,
+        Other
+    }
+
     public static class ToolCategoryMap
     {
         /// <summary>
         /// Maps tool names to their category.
-        /// This is the authoritative source; GeneralTools.ToolCategories mirrors this for get_help.
+        /// This is the authoritative source for get_help and StdioProxy tool filtering.
         /// </summary>
-        public static readonly Dictionary<string, string> ToolToCategory = new Dictionary<string, string>
+        public static readonly Dictionary<string, ToolCategory> ToolToCategory = new Dictionary<string, ToolCategory>
         {
             // General
-            { "execute_command", "General" },
-            { "get_status", "General" },
-            { "get_help", "General" },
+            { "execute_command", ToolCategory.General },
+            { "get_status", ToolCategory.General },
+            { "get_help", ToolCategory.General },
             // Solution
-            { "solution_open", "Solution" },
-            { "solution_close", "Solution" },
-            { "solution_info", "Solution" },
+            { "solution_open", ToolCategory.Solution },
+            { "solution_close", ToolCategory.Solution },
+            { "solution_info", ToolCategory.Solution },
             // Project
-            { "project_list", "Project" },
-            { "project_info", "Project" },
+            { "project_list", ToolCategory.Project },
+            { "project_info", ToolCategory.Project },
             // Build
-            { "build_solution", "Build" },
-            { "build_project", "Build" },
-            { "clean", "Build" },
-            { "rebuild", "Build" },
-            { "get_build_errors", "Build" },
-            { "build_configuration", "Build" },
+            { "build_solution", ToolCategory.Build },
+            { "build_project", ToolCategory.Build },
+            { "clean", ToolCategory.Build },
+            { "rebuild", ToolCategory.Build },
+            { "get_build_errors", ToolCategory.Build },
+            { "build_configuration", ToolCategory.Build },
             // Editor
-            { "file_open", "Editor" },
-            { "file_close", "Editor" },
-            { "file_read", "Editor" },
-            { "file_write", "Editor" },
-            { "file_edit", "Editor" },
-            { "get_active_document", "Editor" },
-            { "find_in_files", "Editor" },
+            { "file_open", ToolCategory.Editor },
+            { "file_close", ToolCategory.Editor },
+            { "file_read", ToolCategory.Editor },
+            { "file_write", ToolCategory.Editor },
+            { "file_edit", ToolCategory.Editor },
+            { "get_active_document", ToolCategory.Editor },
+            { "find_in_files", ToolCategory.Editor },
             // Debugger
-            { "debug_start", "Debugger" },
-            { "debug_start_wait_break", "Debugger" },
-            { "debug_start_without_debugging", "Debugger" },
-            { "debug_stop", "Debugger" },
-            { "debug_restart", "Debugger" },
-            { "debug_attach", "Debugger" },
-            { "debug_break", "Debugger" },
-            { "debug_continue", "Debugger" },
-            { "debug_step", "Debugger" },
-            { "debug_get_callstack", "Debugger" },
-            { "debug_get_locals", "Debugger" },
-            { "debug_get_threads", "Debugger" },
-            { "debug_get_mode", "Debugger" },
-            { "debugger_wait_break", "Debugger" },
-            { "debug_evaluate", "Debugger" },
+            { "debug_start", ToolCategory.Debugger },
+            { "debug_start_wait_break", ToolCategory.Debugger },
+            { "debug_start_without_debugging", ToolCategory.Debugger },
+            { "debug_stop", ToolCategory.Debugger },
+            { "debug_restart", ToolCategory.Debugger },
+            { "debug_attach", ToolCategory.Debugger },
+            { "debug_break", ToolCategory.Debugger },
+            { "debug_continue", ToolCategory.Debugger },
+            { "debug_step", ToolCategory.Debugger },
+            { "debug_get_callstack", ToolCategory.Debugger },
+            { "debug_switch_frame", ToolCategory.Debugger },
+            { "debug_get_locals", ToolCategory.Debugger },
+            { "debug_get_threads", ToolCategory.Debugger },
+            { "debug_get_mode", ToolCategory.Debugger },
+            { "debugger_wait_break", ToolCategory.Debugger },
+            { "debug_evaluate", ToolCategory.Debugger },
             // Breakpoint
-            { "breakpoint_set", "Breakpoint" },
-            { "breakpoint_remove", "Breakpoint" },
-            { "breakpoint_list", "Breakpoint" },
-            { "breakpoint_enable", "Breakpoint" },
+            { "breakpoint_set", ToolCategory.Breakpoint },
+            { "breakpoint_remove", ToolCategory.Breakpoint },
+            { "breakpoint_list", ToolCategory.Breakpoint },
+            { "breakpoint_enable", ToolCategory.Breakpoint },
             // Watch
-            { "watch_add", "Watch" },
-            { "watch_remove", "Watch" },
-            { "watch_list", "Watch" },
+            { "watch_add", ToolCategory.Watch },
+            { "watch_remove", ToolCategory.Watch },
+            { "watch_list", ToolCategory.Watch },
             // Thread
-            { "thread_switch", "Thread" },
-            { "thread_set_frozen", "Thread" },
-            { "thread_get_callstack", "Thread" },
+            { "thread_switch", ToolCategory.Thread },
+            { "thread_set_frozen", ToolCategory.Thread },
+            { "thread_get_callstack", ToolCategory.Thread },
             // Process
-            { "process_list_debugged", "Process" },
-            { "process_list_local", "Process" },
-            { "process_detach", "Process" },
-            { "process_terminate", "Process" },
+            { "process_list_debugged", ToolCategory.Process },
+            { "process_list_local", ToolCategory.Process },
+            { "process_detach", ToolCategory.Process },
+            { "process_terminate", ToolCategory.Process },
             // Immediate Window
-            { "immediate_execute", "Immediate" },
+            { "immediate_execute", ToolCategory.Immediate },
             // Module
-            { "module_list", "Module" },
+            { "module_list", ToolCategory.Module },
             // CPU Register
-            { "register_list", "Register" },
-            { "register_get", "Register" },
+            { "register_list", ToolCategory.Register },
+            { "register_get", ToolCategory.Register },
             // Exception Settings
-            { "exception_settings_get", "Exception" },
-            { "exception_settings_set", "Exception" },
+            { "exception_settings_get", ToolCategory.Exception },
+            { "exception_settings_set", ToolCategory.Exception },
             // Memory
-            { "memory_read", "Memory" },
+            { "memory_read", ToolCategory.Memory },
             // Parallel Debug
-            { "parallel_stacks", "Parallel" },
-            { "parallel_watch", "Parallel" },
-            { "parallel_tasks_list", "Parallel" },
+            { "parallel_stacks", ToolCategory.Parallel },
+            { "parallel_watch", ToolCategory.Parallel },
+            { "parallel_tasks_list", ToolCategory.Parallel },
             // Diagnostics
-            { "diagnostics_binding_errors", "Diagnostics" },
+            { "diagnostics_binding_errors", ToolCategory.Diagnostics },
             // Output
-            { "output_write", "Output" },
-            { "output_read", "Output" },
-            { "error_list_get", "Output" },
-            { "output_clear", "Output" },
+            { "output_write", ToolCategory.Output },
+            { "output_read", ToolCategory.Output },
+            { "error_list_get", ToolCategory.Output },
+            { "output_clear", ToolCategory.Output },
             // UI Automation
-            { "ui_capture_window", "UI" },
-            { "ui_capture_region", "UI" },
-            { "ui_snapshot", "UI" },
-            { "ui_get_tree", "UI" },
-            { "ui_find_elements", "UI" },
-            { "ui_wait_for_element", "UI" },
-            { "ui_wait_idle", "UI" },
-            { "ui_get_element", "UI" },
-            { "ui_click", "UI" },
-            { "ui_double_click", "UI" },
-            { "ui_right_click", "UI" },
-            { "ui_drag", "UI" },
-            { "ui_mouse_wheel", "UI" },
-            { "ui_set_value", "UI" },
-            { "ui_invoke", "UI" },
-            { "ui_send_keys", "UI" },
+            { "ui_capture_window", ToolCategory.UI },
+            { "ui_capture_region", ToolCategory.UI },
+            { "ui_snapshot", ToolCategory.UI },
+            { "ui_get_tree", ToolCategory.UI },
+            { "ui_find_elements", ToolCategory.UI },
+            { "ui_wait_for_element", ToolCategory.UI },
+            { "ui_wait_idle", ToolCategory.UI },
+            { "ui_get_element", ToolCategory.UI },
+            { "ui_click", ToolCategory.UI },
+            { "ui_double_click", ToolCategory.UI },
+            { "ui_right_click", ToolCategory.UI },
+            { "ui_drag", ToolCategory.UI },
+            { "ui_mouse_wheel", ToolCategory.UI },
+            { "ui_set_value", ToolCategory.UI },
+            { "ui_invoke", ToolCategory.UI },
+            { "ui_send_keys", ToolCategory.UI },
             // Console
-            { "console_read", "Console" },
-            { "console_send", "Console" },
-            { "console_get_info", "Console" },
+            { "console_read", ToolCategory.Console },
+            { "console_send", ToolCategory.Console },
+            { "console_get_info", ToolCategory.Console },
             // Web (CDP)
-            { "web_connect", "Web" },
-            { "web_disconnect", "Web" },
-            { "web_status", "Web" },
-            { "web_navigate", "Web" },
-            { "web_screenshot", "Web" },
-            { "web_dom_get", "Web" },
-            { "web_dom_query", "Web" },
-            { "web_console", "Web" },
-            { "web_js_execute", "Web" },
-            { "web_network", "Web" },
-            { "web_element_click", "Web" },
-            { "web_element_set_value", "Web" },
+            { "web_connect", ToolCategory.Web },
+            { "web_disconnect", ToolCategory.Web },
+            { "web_status", ToolCategory.Web },
+            { "web_navigate", ToolCategory.Web },
+            { "web_screenshot", ToolCategory.Web },
+            { "web_dom_get", ToolCategory.Web },
+            { "web_dom_query", ToolCategory.Web },
+            { "web_console", ToolCategory.Web },
+            { "web_js_execute", ToolCategory.Web },
+            { "web_network", ToolCategory.Web },
+            { "web_element_click", ToolCategory.Web },
+            { "web_element_set_value", ToolCategory.Web },
             // Test
-            { "test_discover", "Test" },
-            { "test_run", "Test" },
-            { "test_results", "Test" },
+            { "test_discover", ToolCategory.Test },
+            { "test_run", ToolCategory.Test },
+            { "test_results", ToolCategory.Test },
             // NuGet
-            { "nuget_list", "NuGet" },
-            { "nuget_search", "NuGet" },
-            { "nuget_install", "NuGet" },
-            { "nuget_update", "NuGet" },
-            { "nuget_uninstall", "NuGet" },
+            { "nuget_list", ToolCategory.NuGet },
+            { "nuget_search", ToolCategory.NuGet },
+            { "nuget_install", ToolCategory.NuGet },
+            { "nuget_update", ToolCategory.NuGet },
+            { "nuget_uninstall", ToolCategory.NuGet },
             // Navigation
-            { "code_goto_definition", "Navigation" },
-            { "code_find_references", "Navigation" },
-            { "code_goto_implementation", "Navigation" },
+            { "code_goto_definition", ToolCategory.Navigation },
+            { "code_find_references", ToolCategory.Navigation },
+            { "code_goto_implementation", ToolCategory.Navigation },
             // SolutionExplorer
-            { "solution_add_project", "SolutionExplorer" },
-            { "solution_remove_project", "SolutionExplorer" },
-            { "project_add_file", "SolutionExplorer" },
-            { "project_remove_file", "SolutionExplorer" },
-            { "project_add_reference", "SolutionExplorer" },
-            { "project_remove_reference", "SolutionExplorer" },
+            { "solution_add_project", ToolCategory.SolutionExplorer },
+            { "solution_remove_project", ToolCategory.SolutionExplorer },
+            { "project_add_file", ToolCategory.SolutionExplorer },
+            { "project_remove_file", ToolCategory.SolutionExplorer },
+            { "project_add_reference", ToolCategory.SolutionExplorer },
+            { "project_remove_reference", ToolCategory.SolutionExplorer },
             // EditPreview
-            { "edit_preview", "EditPreview" },
-            { "edit_approve", "EditPreview" },
-            { "edit_reject", "EditPreview" },
-            { "edit_list_pending", "EditPreview" },
+            { "edit_preview", ToolCategory.EditPreview },
+            { "edit_approve", ToolCategory.EditPreview },
+            { "edit_reject", ToolCategory.EditPreview },
+            { "edit_list_pending", ToolCategory.EditPreview },
         };
+
+        public static readonly ToolCategory[] CategoryOrder =
+        {
+            ToolCategory.General,
+            ToolCategory.Solution,
+            ToolCategory.Project,
+            ToolCategory.Build,
+            ToolCategory.Editor,
+            ToolCategory.EditPreview,
+            ToolCategory.Debugger,
+            ToolCategory.Breakpoint,
+            ToolCategory.Watch,
+            ToolCategory.Thread,
+            ToolCategory.Process,
+            ToolCategory.Immediate,
+            ToolCategory.Module,
+            ToolCategory.Register,
+            ToolCategory.Exception,
+            ToolCategory.Memory,
+            ToolCategory.Parallel,
+            ToolCategory.Diagnostics,
+            ToolCategory.Output,
+            ToolCategory.Console,
+            ToolCategory.Web,
+            ToolCategory.UI,
+            ToolCategory.Test,
+            ToolCategory.NuGet,
+            ToolCategory.Navigation,
+            ToolCategory.SolutionExplorer,
+            ToolCategory.Other
+        };
+
+        public static string[] GetCategoryNames(bool includeAll = false)
+        {
+            var names = CategoryOrder.Select(category => category.ToString());
+            if (includeAll)
+                names = new[] { ToolCategory.All.ToString() }.Concat(names);
+            return names.ToArray();
+        }
+
+        public static bool TryParseCategory(string value, out ToolCategory category)
+        {
+            return Enum.TryParse(value, ignoreCase: true, result: out category);
+        }
 
         /// <summary>
         /// Presets map a preset name to a set of categories.
         /// </summary>
-        public static readonly Dictionary<string, HashSet<string>> Presets = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
+        public static readonly Dictionary<string, HashSet<ToolCategory>> Presets = new Dictionary<string, HashSet<ToolCategory>>(StringComparer.OrdinalIgnoreCase)
         {
             {
-                "core", new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                "core", new HashSet<ToolCategory>
                 {
-                    "General", "Solution", "Project", "Build", "Editor", "EditPreview",
-                    "Output", "Navigation", "NuGet", "SolutionExplorer", "Test"
+                    ToolCategory.General, ToolCategory.Solution, ToolCategory.Project,
+                    ToolCategory.Build, ToolCategory.Editor, ToolCategory.EditPreview,
+                    ToolCategory.Output, ToolCategory.Navigation, ToolCategory.NuGet,
+                    ToolCategory.SolutionExplorer, ToolCategory.Test
                 }
             },
             {
-                "debug", new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                "debug", new HashSet<ToolCategory>
                 {
-                    "Debugger", "Breakpoint", "Watch", "Thread", "Process",
-                    "Immediate", "Module", "Register", "Exception", "Memory",
-                    "Parallel", "Diagnostics", "Console"
+                    ToolCategory.Debugger, ToolCategory.Breakpoint, ToolCategory.Watch,
+                    ToolCategory.Thread, ToolCategory.Process, ToolCategory.Immediate,
+                    ToolCategory.Module, ToolCategory.Register, ToolCategory.Exception,
+                    ToolCategory.Memory, ToolCategory.Parallel, ToolCategory.Diagnostics,
+                    ToolCategory.Console
                 }
             },
             {
-                "web", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Web" }
+                "web", new HashSet<ToolCategory> { ToolCategory.Web }
             },
             {
-                "ui", new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "UI" }
+                "ui", new HashSet<ToolCategory> { ToolCategory.UI }
             },
         };
 
@@ -202,7 +283,7 @@ namespace VsMcp.Shared
                 return null; // all tools
 
             // Collect all categories from presets
-            var allowedCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var allowedCategories = new HashSet<ToolCategory>();
             foreach (var part in parts)
             {
                 if (Presets.TryGetValue(part, out var cats))
@@ -210,10 +291,13 @@ namespace VsMcp.Shared
                     foreach (var cat in cats)
                         allowedCategories.Add(cat);
                 }
+                else if (TryParseCategory(part, out var category) && category != ToolCategory.All)
+                {
+                    allowedCategories.Add(category);
+                }
                 else
                 {
-                    // Treat as a direct category name
-                    allowedCategories.Add(part);
+                    // Unknown category names intentionally match no tools.
                 }
             }
 

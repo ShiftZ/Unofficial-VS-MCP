@@ -78,7 +78,6 @@ namespace VsMcp.Extension.McpServer
 
         private JsonRpcResponse HandleInitialize(JsonRpcRequest request)
         {
-            var toolCount = _registry.GetAllDefinitions().Count;
             var result = new JObject
             {
                 ["protocolVersion"] = McpConstants.ProtocolVersion,
@@ -94,7 +93,7 @@ namespace VsMcp.Extension.McpServer
                     ["name"] = McpConstants.ServerName,
                     ["version"] = McpConstants.ServerVersion
                 },
-                ["instructions"] = McpConstants.GetInstructions(toolCount)
+                ["instructions"] = McpConstants.GetInstructions()
             };
             return JsonRpcResponse.Success(request.Id, result);
         }

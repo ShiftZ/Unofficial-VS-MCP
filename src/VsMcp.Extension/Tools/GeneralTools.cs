@@ -14,150 +14,6 @@ namespace VsMcp.Extension.Tools
 {
     public static class GeneralTools
     {
-        private static readonly Dictionary<string, string> ToolCategories = new Dictionary<string, string>
-        {
-            // General
-            { "execute_command", "General" },
-            { "get_status", "General" },
-            { "get_help", "General" },
-            // Solution
-            { "solution_open", "Solution" },
-            { "solution_close", "Solution" },
-            { "solution_info", "Solution" },
-            // Project
-            { "project_list", "Project" },
-            { "project_info", "Project" },
-            // Build
-            { "build_solution", "Build" },
-            { "build_project", "Build" },
-            { "clean", "Build" },
-            { "rebuild", "Build" },
-            { "get_build_errors", "Build" },
-            // Editor
-            { "file_open", "Editor" },
-            { "file_close", "Editor" },
-            { "file_read", "Editor" },
-            { "file_write", "Editor" },
-            { "file_edit", "Editor" },
-            { "get_active_document", "Editor" },
-            { "find_in_files", "Editor" },
-            // Debugger
-            { "debug_start", "Debugger" },
-            { "debug_start_wait_break", "Debugger" },
-            { "debug_stop", "Debugger" },
-            { "debug_restart", "Debugger" },
-            { "debug_attach", "Debugger" },
-            { "debug_break", "Debugger" },
-            { "debug_continue", "Debugger" },
-            { "debug_step", "Debugger" },
-            { "debug_get_callstack", "Debugger" },
-            { "debug_get_locals", "Debugger" },
-            { "debug_get_threads", "Debugger" },
-            { "debug_get_mode", "Debugger" },
-            { "debugger_wait_break", "Debugger" },
-            { "debug_evaluate", "Debugger" },
-            // Breakpoint
-            { "breakpoint_set", "Breakpoint" },
-            { "breakpoint_remove", "Breakpoint" },
-            { "breakpoint_list", "Breakpoint" },
-            { "breakpoint_enable", "Breakpoint" },
-            // Watch
-            { "watch_add", "Watch" },
-            { "watch_remove", "Watch" },
-            { "watch_list", "Watch" },
-            // Thread
-            { "thread_switch", "Thread" },
-            { "thread_set_frozen", "Thread" },
-            { "thread_get_callstack", "Thread" },
-            // Process
-            { "process_list_debugged", "Process" },
-            { "process_list_local", "Process" },
-            { "process_detach", "Process" },
-            { "process_terminate", "Process" },
-            // Immediate Window
-            { "immediate_execute", "Immediate" },
-            // Module
-            { "module_list", "Module" },
-            // CPU Register
-            { "register_list", "Register" },
-            { "register_get", "Register" },
-            // Exception Settings
-            { "exception_settings_get", "Exception" },
-            { "exception_settings_set", "Exception" },
-            // Memory
-            { "memory_read", "Memory" },
-            // Parallel Debug
-            { "parallel_stacks", "Parallel" },
-            { "parallel_watch", "Parallel" },
-            { "parallel_tasks_list", "Parallel" },
-            // Diagnostics
-            { "diagnostics_binding_errors", "Diagnostics" },
-            // Output
-            { "output_write", "Output" },
-            { "output_read", "Output" },
-            { "error_list_get", "Output" },
-            // UI Automation
-            { "ui_capture_window", "UI" },
-            { "ui_capture_region", "UI" },
-            { "ui_snapshot", "UI" },
-            { "ui_get_tree", "UI" },
-            { "ui_find_elements", "UI" },
-            { "ui_get_element", "UI" },
-            { "ui_click", "UI" },
-            { "ui_double_click", "UI" },
-            { "ui_right_click", "UI" },
-            { "ui_drag", "UI" },
-            { "ui_mouse_wheel", "UI" },
-            { "ui_set_value", "UI" },
-            { "ui_invoke", "UI" },
-            { "ui_send_keys", "UI" },
-            { "ui_wait_for_element", "UI" },
-            { "ui_wait_idle", "UI" },
-            // Console
-            { "console_read", "Console" },
-            { "console_send", "Console" },
-            { "console_get_info", "Console" },
-            // Web (CDP)
-            { "web_connect", "Web" },
-            { "web_disconnect", "Web" },
-            { "web_status", "Web" },
-            { "web_navigate", "Web" },
-            { "web_screenshot", "Web" },
-            { "web_dom_get", "Web" },
-            { "web_dom_query", "Web" },
-            { "web_console", "Web" },
-            { "web_js_execute", "Web" },
-            { "web_network", "Web" },
-            { "web_element_click", "Web" },
-            { "web_element_set_value", "Web" },
-            // Test
-            { "test_discover", "Test" },
-            { "test_run", "Test" },
-            { "test_results", "Test" },
-            // NuGet
-            { "nuget_list", "NuGet" },
-            { "nuget_search", "NuGet" },
-            { "nuget_install", "NuGet" },
-            { "nuget_update", "NuGet" },
-            { "nuget_uninstall", "NuGet" },
-            // Navigation
-            { "code_goto_definition", "Navigation" },
-            { "code_find_references", "Navigation" },
-            { "code_goto_implementation", "Navigation" },
-            // SolutionExplorer
-            { "solution_add_project", "SolutionExplorer" },
-            { "solution_remove_project", "SolutionExplorer" },
-            { "project_add_file", "SolutionExplorer" },
-            { "project_remove_file", "SolutionExplorer" },
-            { "project_add_reference", "SolutionExplorer" },
-            { "project_remove_reference", "SolutionExplorer" },
-            // EditPreview
-            { "edit_preview", "EditPreview" },
-            { "edit_approve", "EditPreview" },
-            { "edit_reject", "EditPreview" },
-            { "edit_list_pending", "EditPreview" },
-        };
-
         public static void Register(McpToolRegistry registry, VsServiceAccessor accessor)
         {
             registry.Register(
@@ -180,19 +36,32 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "get_help",
-                    "Get a categorized list of all available vs-mcp tools with descriptions. Call this first to understand what tools are available.",
-                    SchemaBuilder.Empty()),
-                args => GetHelpAsync(registry));
+                    "Get available vs-mcp tools with descriptions. Omit category or use category='All' for every category, or pass one category to list only tools under that category.",
+                    SchemaBuilder.Create()
+                        .AddEnum("category", "Tool category to list. Defaults to All.", ToolCategoryMap.GetCategoryNames(includeAll: true), defaultValue: ToolCategory.All.ToString())
+                        .Build()),
+                args => GetHelpAsync(registry, args));
         }
 
-        private static Task<McpToolResult> GetHelpAsync(McpToolRegistry registry)
+        private static Task<McpToolResult> GetHelpAsync(McpToolRegistry registry, JObject args)
         {
+            var requestedCategory = ToolCategory.All;
+            var categoryArg = args.Value<string>("category");
+            if (!string.IsNullOrWhiteSpace(categoryArg))
+            {
+                if (!ToolCategoryMap.TryParseCategory(categoryArg, out requestedCategory))
+                    return Task.FromResult(McpToolResult.Error($"Unknown category '{categoryArg}'. Valid categories: {string.Join(", ", ToolCategoryMap.GetCategoryNames(includeAll: true))}"));
+            }
+
             var allTools = registry.GetAllDefinitions();
-            var categorized = new Dictionary<string, List<object>>();
+            var categorized = new Dictionary<ToolCategory, List<object>>();
 
             foreach (var tool in allTools)
             {
-                var category = ToolCategories.TryGetValue(tool.Name, out var cat) ? cat : "Other";
+                var category = ToolCategoryMap.ToolToCategory.TryGetValue(tool.Name, out var cat) ? cat : ToolCategory.Other;
+                if (requestedCategory != ToolCategory.All && category != requestedCategory)
+                    continue;
+
                 if (!categorized.ContainsKey(category))
                     categorized[category] = new List<object>();
 
@@ -203,19 +72,20 @@ namespace VsMcp.Extension.Tools
                 });
             }
 
-            var categoryOrder = new[] { "General", "Solution", "Project", "Build", "Editor", "EditPreview", "Debugger", "Breakpoint", "Watch", "Thread", "Process", "Immediate", "Module", "Register", "Exception", "Memory", "Parallel", "Diagnostics", "Output", "Console", "Web", "UI", "Test", "NuGet", "Navigation", "SolutionExplorer", "Other" };
             var ordered = new List<object>();
-            foreach (var cat in categoryOrder)
+            foreach (var cat in ToolCategoryMap.CategoryOrder)
             {
                 if (categorized.TryGetValue(cat, out var tools))
                 {
-                    ordered.Add(new { category = cat, tools });
+                    ordered.Add(new { category = cat.ToString(), tools });
                 }
             }
 
             return Task.FromResult(McpToolResult.Success(new
             {
-                totalTools = allTools.Count,
+                category = requestedCategory.ToString(),
+                availableCategories = ToolCategoryMap.GetCategoryNames(includeAll: true),
+                totalTools = categorized.Values.Sum(tools => tools.Count),
                 categories = ordered,
                 guidelines = new
                 {

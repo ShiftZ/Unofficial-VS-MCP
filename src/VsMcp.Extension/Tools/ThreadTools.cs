@@ -42,19 +42,6 @@ namespace VsMcp.Extension.Tools
                 args => ThreadGetCallstackAsync(accessor, args));
         }
 
-        private static Thread FindThread(Debugger debugger, int threadId)
-        {
-            foreach (Thread t in debugger.CurrentProgram.Threads)
-            {
-                try
-                {
-                    if (t.ID == threadId) return t;
-                }
-                catch { }
-            }
-            return null;
-        }
-
         private static async Task<McpToolResult> ThreadSwitchAsync(VsServiceAccessor accessor, JObject args)
         {
             var threadId = args.Value<int?>("threadId");
@@ -69,7 +56,7 @@ namespace VsMcp.Extension.Tools
                 if (dte.Debugger.CurrentMode != dbgDebugMode.dbgBreakMode)
                     return McpToolResult.Error("Debugger must be in Break mode to switch threads");
 
-                var thread = FindThread(dte.Debugger, threadId.Value);
+                var thread = DebugHelpers.FindThread(dte.Debugger, threadId.Value);
                 if (thread == null)
                     return McpToolResult.Error($"Thread with ID {threadId.Value} not found");
 
@@ -102,7 +89,7 @@ namespace VsMcp.Extension.Tools
                 if (dte.Debugger.CurrentMode != dbgDebugMode.dbgBreakMode)
                     return McpToolResult.Error("Debugger must be in Break mode to freeze/thaw threads");
 
-                var thread = FindThread(dte.Debugger, threadId.Value);
+                var thread = DebugHelpers.FindThread(dte.Debugger, threadId.Value);
                 if (thread == null)
                     return McpToolResult.Error($"Thread with ID {threadId.Value} not found");
 
@@ -129,17 +116,19 @@ namespace VsMcp.Extension.Tools
                 if (dte.Debugger.CurrentMode != dbgDebugMode.dbgBreakMode)
                     return McpToolResult.Error("Debugger must be in Break mode to get callstack");
 
-                var thread = FindThread(dte.Debugger, threadId.Value);
+                var thread = DebugHelpers.FindThread(dte.Debugger, threadId.Value);
                 if (thread == null)
                     return McpToolResult.Error($"Thread with ID {threadId.Value} not found");
 
                 var frames = new List<object>();
+                var frameIndex = 0;
                 foreach (StackFrame frame in thread.StackFrames)
                 {
                     try
                     {
                         frames.Add(new
                         {
+                            frameIndex,
                             functionName = frame.FunctionName,
                             module = frame.Module,
                             fileName = DebugHelpers.TryGetFrameFileName(frame),
@@ -148,6 +137,8 @@ namespace VsMcp.Extension.Tools
                         });
                     }
                     catch { }
+
+                    frameIndex++;
                 }
 
                 return McpToolResult.Success(new

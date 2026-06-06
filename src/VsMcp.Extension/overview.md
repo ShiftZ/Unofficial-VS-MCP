@@ -6,33 +6,33 @@
 
 ## Features
 
-VS MCP Server exposes **75 tools** across the following categories:
+VS MCP Server exposes tools across the following categories:
 
-### General (3 tools)
+### General
 - Execute VS commands, get IDE status, and view available tool help
 
-### Solution & Project (5 tools)
+### Solution & Project
 - Open/close solutions, list projects, get project details
 
-### Build (5 tools)
+### Build
 - Build solution/project, clean, rebuild, and retrieve build errors
 
-### Editor (7 tools)
+### Editor
 - Open/close/read/write/edit files, get active document info, search in files
 
-### Debugger (14 tools)
+### Debugger
 - Start/stop/restart debugging, attach to processes, step over/into/out, get call stack, locals, threads, evaluate expressions
 
-### Breakpoints (7 tools)
+### Breakpoints
 - Set/remove/list breakpoints, conditional breakpoints, hit count breakpoints, function breakpoints
 
-### Output & Diagnostics (4 tools)
+### Output & Diagnostics
 - Read/write output panes, get error list items, view XAML binding errors
 
-### UI Automation (8 tools)
+### UI Automation
 - Capture window/region screenshots, inspect UI element trees, find/click/invoke UI elements
 
-### Advanced Debug (22 tools)
+### Advanced Debug
 - Watch variables, thread management (switch/freeze/thaw), process management, immediate window execution, module listing, CPU register inspection, exception settings, memory reading, parallel stacks/watch/tasks
 
 ## Requirements

@@ -14,6 +14,19 @@ namespace VsMcp.Extension.Tools
             new System.Collections.Generic.HashSet<string>(System.StringComparer.OrdinalIgnoreCase)
             { "Unknown", "不明", "未知", "알 수 없음", "Unbekannt", "Inconnu", "Desconocido", "Sconosciuto", "Desconhecido", "Неизвестно", "Bilinmiyor", "Neznámý", "Nieznany" };
 
+        public static Thread FindThread(Debugger debugger, int threadId)
+        {
+            foreach (Thread t in debugger.CurrentProgram.Threads)
+            {
+                try
+                {
+                    if (t.ID == threadId) return t;
+                }
+                catch { }
+            }
+            return null;
+        }
+
         /// <summary>
         /// Determines if a stack frame is likely a managed code frame.
         /// Uses heuristics: known managed languages, or namespace-qualified function names.
