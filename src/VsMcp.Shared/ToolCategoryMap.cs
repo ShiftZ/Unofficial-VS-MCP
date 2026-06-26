@@ -70,6 +70,7 @@ namespace VsMcp.Shared
             { "file_write", ToolCategory.Editor },
             { "file_edit", ToolCategory.Editor },
             { "get_active_document", ToolCategory.Editor },
+            { "get_selected_text", ToolCategory.Editor },
             { "find_in_files", ToolCategory.Editor },
             // Debugger
             { "debug_start", ToolCategory.Debugger },

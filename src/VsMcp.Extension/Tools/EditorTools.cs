@@ -78,6 +78,13 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "get_selected_text",
+                    "Read the current text selection in the active VS editor document, including selected text and range metadata. Use get_active_document when you only need the focused document or caret, and file_read when you need file contents by path.",
+                    SchemaBuilder.Empty()),
+                args => GetSelectedTextAsync(accessor));
+
+            registry.Register(
+                new McpToolDefinition(
                     "find_in_files",
                     "Text search across files in the solution directory (literal text or regex). Searches the file system directly (fast, does not block VS UI). Skips bin/obj/.vs/packages/node_modules. Not symbol-aware — for finding references of a symbol use code_find_references; for navigating to a definition use code_goto_definition.",
                     SchemaBuilder.Create()
@@ -313,6 +320,44 @@ namespace VsMcp.Extension.Tools
                     cursorLine,
                     cursorColumn,
                     lineCount
+                });
+            });
+        }
+
+        private static async Task<McpToolResult> GetSelectedTextAsync(VsServiceAccessor accessor)
+        {
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                if (dte.ActiveDocument == null) return McpToolResult.Error("No active document");
+
+                var doc = dte.ActiveDocument;
+                TextSelection selection;
+
+                try
+                {
+                    selection = (TextSelection)doc.Selection;
+                }
+                catch (Exception ex)
+                {
+                    return McpToolResult.Error($"Active document does not expose a text selection: {ex.Message}");
+                }
+
+                return McpToolResult.Success(new
+                {
+                    path = doc.FullName,
+                    name = doc.Name,
+                    language = doc.Language,
+                    isEmpty = selection.IsEmpty,
+                    startLine = selection.TopPoint.Line,
+                    startColumn = selection.TopPoint.DisplayColumn,
+                    endLine = selection.BottomPoint.Line,
+                    endColumn = selection.BottomPoint.DisplayColumn,
+                    activeLine = selection.ActivePoint.Line,
+                    activeColumn = selection.ActivePoint.DisplayColumn,
+                    text = selection.Text
                 });
             });
         }

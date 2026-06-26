@@ -77,6 +77,7 @@ VS MCP Server exposes tools across the following categories:
 | `file_write` | Write content to a file, replacing its entire contents |
 | `file_edit` | Edit a file by replacing a specific text occurrence with new text |
 | `get_active_document` | Get information about the currently active document in the editor |
+| `get_selected_text` | Read selected text and range metadata from the active editor document |
 | `find_in_files` | Search for text in files within the solution |
 
 #### Edit Preview
