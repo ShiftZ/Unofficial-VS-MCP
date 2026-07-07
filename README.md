@@ -19,7 +19,7 @@ VS MCP Server exposes tools across the following categories:
 | Edit Preview | Diff preview, approve/reject edits with VS diff viewer |
 | Code Navigation | Go to definition, find references, go to implementation |
 | Solution Explorer | Add/remove projects, files, and references |
-| Debugger | Start/stop/restart, attach, stepping, wait for stops, call stack, locals, threads, evaluate, run without debugging |
+| Debugger | Start/stop/restart, attach, switch processes, stepping, wait for stops, call stack, locals, threads, evaluate, run without debugging |
 | Breakpoints | Set/remove/list, enable/disable breakpoints |
 | Output & Diagnostics | Read/write/clear output panes, error list, XAML binding errors |
 | Console | Read console output, send input/keys, get console info for debugged apps |
@@ -135,11 +135,12 @@ VS MCP Server exposes tools across the following categories:
 | `debug_step` | Step through code (direction: over, into, or out) |
 | `debug_get_callstack` | Get the current call stack of the active thread |
 | `debug_switch_frame` | Switch the current stack frame by frame index, optionally on a specific thread |
+| `debug_switch_process` | Switch the active debug process by PID |
 | `debug_get_locals` | Get the local variables in the current stack frame |
 | `debug_get_threads` | Get all threads in the current debug session |
 | `debug_get_mode` | Get the current debugger mode (Design, Running, or Break) |
 | `debug_wait_break` | Wait for a debugger break or debug-session stop using VS debugger events |
-| `debug_evaluate` | Evaluate an expression in the current debug context (only works in break mode) |
+| `debug_evaluate` | Read-only evaluate an expression in the current debug context (currently selected thread and stack frame only; break mode) |
 
 #### Breakpoint
 
@@ -209,7 +210,7 @@ VS MCP Server exposes tools across the following categories:
 
 | Tool | Description |
 |------|-------------|
-| `process_list_debugged` | List all processes currently being debugged |
+| `process_list_debugged` | List all processes currently being debugged and mark the active one |
 | `process_list_local` | List local processes available for attaching the debugger |
 | `process_detach` | Detach the debugger from a specific process |
 | `process_terminate` | Terminate a process being debugged |
@@ -218,7 +219,7 @@ VS MCP Server exposes tools across the following categories:
 
 | Tool | Description |
 |------|-------------|
-| `immediate_execute` | Execute an expression with side effects in the debugger context (like the Immediate Window) |
+| `immediate_execute` | Execute an expression with side effects in the current debug context (currently selected thread and stack frame, like the Immediate Window) |
 
 #### Module
 

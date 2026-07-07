@@ -107,8 +107,8 @@ namespace VsMcp.Extension.Tools
         }
 
         /// <summary>
-        /// Tries to evaluate an expression, searching across frames and threads for one that works.
-        /// Returns the Expression result or null if evaluation failed everywhere.
+        /// Tries to evaluate an expression in the current thread and stack frame.
+        /// Returns the Expression result or null if evaluation failed in the current context.
         /// </summary>
         public static Expression TryEvaluateExpression(Debugger debugger, string expression)
         {
@@ -117,58 +117,95 @@ namespace VsMcp.Extension.Tools
 
         public static Expression TryEvaluateExpression(Debugger debugger, string expression, bool allowSideEffects, int timeout)
         {
+            var result = TryEvaluateExpressionDetailed(debugger, expression, allowSideEffects, timeout);
+            return result.Succeeded ? result.Expression : null;
+        }
+
+        public static DebugExpressionEvaluationResult TryEvaluateExpressionDetailed(Debugger debugger, string expression)
+        {
+            return TryEvaluateExpressionDetailed(debugger, expression, false, 3000);
+        }
+
+        public static DebugExpressionEvaluationResult TryEvaluateExpressionDetailed(
+            Debugger debugger,
+            string expression,
+            bool allowSideEffects,
+            int timeout)
+        {
             try
             {
+                var context = CaptureCurrentEvaluationContext(debugger);
                 var result = debugger.GetExpression(expression, allowSideEffects, timeout);
-                if (result.IsValidValue) return result;
+                if (result == null)
+                    return DebugExpressionEvaluationResult.Failure(
+                        context,
+                        "Visual Studio returned no Expression object.",
+                        null,
+                        null);
+
+                if (result.IsValidValue)
+                    return DebugExpressionEvaluationResult.Success(context, result);
+
+                return DebugExpressionEvaluationResult.Failure(
+                    context,
+                    "Visual Studio returned an invalid expression value.",
+                    result,
+                    null);
             }
-            catch { }
-
-            var candidates = new List<KeyValuePair<Thread, StackFrame>>();
-            var fallbacks = new List<KeyValuePair<Thread, StackFrame>>();
-
-            foreach (Thread t in debugger.CurrentProgram.Threads)
+            catch (System.Exception ex)
             {
-                try
-                {
-                    foreach (StackFrame frame in t.StackFrames)
-                    {
-                        try
-                        {
-                            if (!IsManagedFrame(frame)) continue;
-
-                            var module = frame.Module ?? "";
-                            bool isUserCode = !string.IsNullOrEmpty(module) &&
-                                !module.Contains("\\dotnet\\") &&
-                                !module.Contains("\\Windows\\") &&
-                                !module.Contains("\\Microsoft.NET\\");
-
-                            if (isUserCode)
-                                candidates.Add(new KeyValuePair<Thread, StackFrame>(t, frame));
-                            else
-                                fallbacks.Add(new KeyValuePair<Thread, StackFrame>(t, frame));
-                        }
-                        catch { }
-                    }
-                }
-                catch { }
+                return DebugExpressionEvaluationResult.Failure(
+                    CaptureCurrentEvaluationContext(debugger),
+                    "Visual Studio threw while evaluating the expression.",
+                    null,
+                    ex);
             }
+        }
 
-            candidates.AddRange(fallbacks);
+        private static DebugExpressionEvaluationContext CaptureCurrentEvaluationContext(Debugger debugger)
+        {
+            var context = new DebugExpressionEvaluationContext();
 
-            foreach (var candidate in candidates)
+            try
             {
-                try
+                var thread = debugger.CurrentThread;
+                if (thread == null)
                 {
-                    debugger.CurrentThread = candidate.Key;
-                    debugger.CurrentStackFrame = candidate.Value;
-                    var result = debugger.GetExpression(expression, allowSideEffects, timeout);
-                    if (result.IsValidValue) return result;
+                    context.ThreadError = "No current thread is available.";
                 }
-                catch { }
+                else
+                {
+                    context.ThreadId = thread.ID;
+                    context.ThreadName = thread.Name;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                context.ThreadError = ex.Message;
             }
 
-            return null;
+            try
+            {
+                var frame = debugger.CurrentStackFrame;
+                if (frame == null)
+                {
+                    context.FrameError = "No current stack frame is available.";
+                }
+                else
+                {
+                    context.FunctionName = frame.FunctionName;
+                    context.Module = frame.Module;
+                    context.FileName = TryGetFrameFileName(frame);
+                    context.Line = TryGetFrameLine(frame);
+                    context.Language = frame.Language;
+                }
+            }
+            catch (System.Exception ex)
+            {
+                context.FrameError = ex.Message;
+            }
+
+            return context;
         }
 
         public static string TryGetFrameFileName(StackFrame frame)
@@ -208,6 +245,152 @@ namespace VsMcp.Extension.Tools
             }
             catch { }
             return "";
+        }
+    }
+
+    internal sealed class DebugExpressionEvaluationResult
+    {
+        private DebugExpressionEvaluationResult()
+        {
+        }
+
+        public bool Succeeded { get; private set; }
+        public Expression Expression { get; private set; }
+        public DebugExpressionEvaluationContext Context { get; private set; }
+        public string FailureReason { get; private set; }
+        public string VisualStudioResult { get; private set; }
+        public string ExpressionName { get; private set; }
+        public string ExpressionType { get; private set; }
+        public string ExceptionType { get; private set; }
+        public string ExceptionMessage { get; private set; }
+
+        public static DebugExpressionEvaluationResult Success(
+            DebugExpressionEvaluationContext context,
+            Expression expression)
+        {
+            return new DebugExpressionEvaluationResult
+            {
+                Succeeded = true,
+                Expression = expression,
+                Context = context
+            };
+        }
+
+        public static DebugExpressionEvaluationResult Failure(
+            DebugExpressionEvaluationContext context,
+            string failureReason,
+            Expression expression,
+            System.Exception exception)
+        {
+            var result = new DebugExpressionEvaluationResult
+            {
+                Succeeded = false,
+                Expression = expression,
+                Context = context,
+                FailureReason = failureReason,
+                VisualStudioResult = TryGetExpressionValue(expression),
+                ExpressionName = TryGetExpressionName(expression),
+                ExpressionType = TryGetExpressionType(expression)
+            };
+
+            if (exception != null)
+            {
+                result.ExceptionType = exception.GetType().FullName;
+                result.ExceptionMessage = exception.Message;
+            }
+
+            return result;
+        }
+
+        public string GetFailureSummary()
+        {
+            var parts = new List<string>
+            {
+                "Expression evaluation failed in the current thread and stack frame."
+            };
+
+            if (!string.IsNullOrEmpty(FailureReason))
+                parts.Add("Reason: " + FailureReason);
+
+            if (!string.IsNullOrEmpty(VisualStudioResult))
+                parts.Add("Visual Studio result: " + VisualStudioResult);
+
+            if (!string.IsNullOrEmpty(ExpressionName))
+                parts.Add("Expression name: " + ExpressionName);
+
+            if (!string.IsNullOrEmpty(ExpressionType))
+                parts.Add("Expression type: " + ExpressionType);
+
+            if (!string.IsNullOrEmpty(ExceptionMessage))
+                parts.Add("Exception: " + ExceptionType + ": " + ExceptionMessage);
+
+            if (Context != null)
+                parts.Add("Context: " + Context.GetSummary());
+
+            return string.Join("\n", parts);
+        }
+
+        private static string TryGetExpressionValue(Expression expression)
+        {
+            if (expression == null) return null;
+
+            try { return expression.Value; }
+            catch (System.Exception ex) { return "Could not read Expression.Value: " + ex.Message; }
+        }
+
+        private static string TryGetExpressionName(Expression expression)
+        {
+            if (expression == null) return null;
+
+            try { return expression.Name; }
+            catch { return null; }
+        }
+
+        private static string TryGetExpressionType(Expression expression)
+        {
+            if (expression == null) return null;
+
+            try { return expression.Type; }
+            catch { return null; }
+        }
+    }
+
+    internal sealed class DebugExpressionEvaluationContext
+    {
+        public int? ThreadId { get; set; }
+        public string ThreadName { get; set; }
+        public string ThreadError { get; set; }
+        public string FunctionName { get; set; }
+        public string Module { get; set; }
+        public string FileName { get; set; }
+        public int Line { get; set; }
+        public string Language { get; set; }
+        public string FrameError { get; set; }
+
+        public string GetSummary()
+        {
+            var parts = new List<string>();
+
+            if (ThreadId.HasValue)
+                parts.Add("threadId=" + ThreadId.Value);
+            if (!string.IsNullOrEmpty(ThreadName))
+                parts.Add("threadName=" + ThreadName);
+            if (!string.IsNullOrEmpty(ThreadError))
+                parts.Add("threadError=" + ThreadError);
+            if (!string.IsNullOrEmpty(FunctionName))
+                parts.Add("function=" + FunctionName);
+            if (!string.IsNullOrEmpty(Language))
+                parts.Add("language=" + Language);
+            if (!string.IsNullOrEmpty(Module))
+                parts.Add("module=" + Module);
+            if (!string.IsNullOrEmpty(FileName))
+                parts.Add("file=" + FileName);
+            if (Line > 0)
+                parts.Add("line=" + Line);
+            if (!string.IsNullOrEmpty(FrameError))
+                parts.Add("frameError=" + FrameError);
+
+            return parts.Count == 0 ? "unavailable" : string.Join(", ", parts);
         }
     }
 }

@@ -121,6 +121,15 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "debug_switch_process",
+                    "Switch the debugger's active process by PID. Use processId values returned by process_list_debugged. The active process controls debugger data such as current threads, stack frames, locals, and expression evaluation.",
+                    SchemaBuilder.Create()
+                        .AddInteger("processId", "PID of the debugged process to make active", required: true)
+                        .Build()),
+                args => DebugSwitchProcessAsync(accessor, args));
+
+            registry.Register(
+                new McpToolDefinition(
                     "debug_get_locals",
                     "Get the local variables in the current stack frame",
                     SchemaBuilder.Empty()),
@@ -143,7 +152,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "debug_evaluate",
-                    "Read-only evaluate an expression in the current debug context — no side effects (no assignments, no method calls that mutate state). Must be in break mode. Use this to inspect variable values. For expressions WITH side effects (assignments, mutating method calls) use immediate_execute. To persist an expression that re-evaluates across breaks, use watch_add.",
+                    "Read-only evaluate an expression in the current debug context (currently selected thread and stack frame only). No side effects (no assignments, no method calls that mutate state). Must be in break mode. Use this to inspect variable values. For expressions WITH side effects (assignments, mutating method calls) use immediate_execute. To persist an expression that re-evaluates across breaks, use watch_add.",
                     SchemaBuilder.Create()
                         .AddString("expression", "The expression to evaluate", required: true)
                         .Build()),
@@ -538,6 +547,65 @@ namespace VsMcp.Extension.Tools
             });
         }
 
+        private static async Task<McpToolResult> DebugSwitchProcessAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var processId = args.Value<int?>("processId");
+            if (!processId.HasValue)
+                return McpToolResult.Error("Parameter 'processId' is required");
+
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                if (dte.Debugger.CurrentMode == dbgDebugMode.dbgDesignMode)
+                    return McpToolResult.Error("Debugger is not running");
+
+                Process targetProcess = null;
+                foreach (Process process in dte.Debugger.DebuggedProcesses)
+                {
+                    try
+                    {
+                        if (process.ProcessID == processId.Value)
+                        {
+                            targetProcess = process;
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (targetProcess == null)
+                    return McpToolResult.Error($"No debugged process found with PID {processId.Value}");
+
+                var previousProcess = dte.Debugger.CurrentProcess;
+                dte.Debugger.CurrentProcess = targetProcess;
+
+                var result = new Dictionary<string, object>
+                {
+                    ["message"] = $"Switched active debug process to {targetProcess.ProcessID} ({targetProcess.Name})",
+                    ["processId"] = targetProcess.ProcessID,
+                    ["processName"] = targetProcess.Name,
+                    ["previousProcessId"] = previousProcess?.ProcessID,
+                    ["previousProcessName"] = previousProcess?.Name,
+                    ["mode"] = GetDebuggerModeName(dte.Debugger.CurrentMode)
+                };
+
+                try
+                {
+                    var thread = dte.Debugger.CurrentThread;
+                    if (thread != null)
+                    {
+                        result["threadId"] = thread.ID;
+                        result["threadName"] = thread.Name;
+                    }
+                }
+                catch { }
+
+                return McpToolResult.Success(result);
+            });
+        }
+
 
         private static async Task<McpToolResult> DebugGetLocalsAsync(VsServiceAccessor accessor)
         {
@@ -729,11 +797,12 @@ namespace VsMcp.Extension.Tools
                 if (dte.Debugger.CurrentMode != dbgDebugMode.dbgBreakMode)
                     return McpToolResult.Error("Debugger must be in Break mode to evaluate expressions");
 
-                // Try evaluation, searching across frames and threads for one that works
-                var evalResult = DebugHelpers.TryEvaluateExpression(dte.Debugger, expression);
-                if (evalResult == null)
-                    return McpToolResult.Error("Expression evaluation failed: no suitable managed frame found");
+                var evaluation = DebugHelpers.TryEvaluateExpressionDetailed(dte.Debugger, expression);
+                if (!evaluation.Succeeded)
+                    return McpToolResult.Error(
+                        "Expression: " + expression + "\n" + evaluation.GetFailureSummary());
 
+                var evalResult = evaluation.Expression;
                 var resultText = $"[debug_evaluate] {expression} = {evalResult.Value}  ({evalResult.Type})";
                 try
                 {
@@ -756,7 +825,9 @@ namespace VsMcp.Extension.Tools
                     value = evalResult.Value,
                     type = evalResult.Type,
                     name = evalResult.Name,
-                    frame = dte.Debugger.CurrentStackFrame?.FunctionName
+                    threadId = evaluation.Context?.ThreadId,
+                    frame = evaluation.Context?.FunctionName,
+                    language = evaluation.Context?.Language
                 });
             });
         }
@@ -797,6 +868,17 @@ namespace VsMcp.Extension.Tools
                 ["timedOut"] = signal.Status == "timeout",
                 ["elapsedMs"] = elapsedMs
             };
+
+            try
+            {
+                var process = dte.Debugger.CurrentProcess;
+                if (process != null)
+                {
+                    result["processId"] = process.ProcessID;
+                    result["processName"] = process.Name;
+                }
+            }
+            catch { }
 
             if (!includeBreakContext || currentMode != dbgDebugMode.dbgBreakMode)
                 return McpToolResult.Success(result);

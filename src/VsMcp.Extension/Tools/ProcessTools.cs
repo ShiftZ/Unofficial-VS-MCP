@@ -58,6 +58,8 @@ namespace VsMcp.Extension.Tools
                     .Run(() => accessor.GetDteAsync());
 
                 var processes = new List<object>();
+                var currentProcessId = TryGetCurrentProcessId(dte.Debugger);
+                var currentProcessName = TryGetCurrentProcessName(dte.Debugger);
                 foreach (Process2 proc in dte.Debugger.DebuggedProcesses)
                 {
                     try
@@ -66,13 +68,14 @@ namespace VsMcp.Extension.Tools
                         {
                             processId = proc.ProcessID,
                             name = proc.Name,
-                            isBeingDebugged = true
+                            isBeingDebugged = true,
+                            isCurrent = currentProcessId.HasValue && proc.ProcessID == currentProcessId.Value
                         });
                     }
                     catch { }
                 }
 
-                return McpToolResult.Success(new { count = processes.Count, processes });
+                return McpToolResult.Success(new { count = processes.Count, currentProcessId, currentProcessName, processes });
             });
         }
 
@@ -161,6 +164,31 @@ namespace VsMcp.Extension.Tools
 
                 return McpToolResult.Error($"No debugged process found with PID {processId.Value}");
             });
+        }
+
+        private static int? TryGetCurrentProcessId(Debugger debugger)
+        {
+            try
+            {
+                var process = debugger.CurrentProcess;
+                return process?.ProcessID;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string TryGetCurrentProcessName(Debugger debugger)
+        {
+            try
+            {
+                return debugger.CurrentProcess?.Name;
+            }
+            catch
+            {
+                return null;
+            }
         }
     }
 }

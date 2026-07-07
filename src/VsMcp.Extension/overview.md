@@ -24,7 +24,7 @@ VS MCP Server exposes tools across the following categories:
 - Find C++ and C# symbol declarations with structured file/line/column results without navigating the IDE
 
 ### Debugger
-- Start/stop/restart debugging, attach to processes, step over/into/out, get call stack, locals, threads, evaluate expressions
+- Start/stop/restart debugging, attach to and switch between processes, step over/into/out, get call stack, locals, threads, evaluate expressions
 
 ### Breakpoints
 - Set/remove/list breakpoints, conditional breakpoints, hit count breakpoints, function breakpoints

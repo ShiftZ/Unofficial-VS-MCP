@@ -15,7 +15,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "immediate_execute",
-                    "Execute an expression WITH side effects in the debugger context (like the VS Immediate Window) — assignments, mutating method calls, etc. Must be in break mode. For read-only inspection of a value without side effects, prefer debug_evaluate. To persist an expression that re-evaluates each break, use watch_add.",
+                    "Execute an expression WITH side effects in the current debug context (currently selected thread and stack frame, like the VS Immediate Window) — assignments, mutating method calls, etc. Must be in break mode. For read-only inspection of a value without side effects, prefer debug_evaluate. To persist an expression that re-evaluates each break, use watch_add.",
                     SchemaBuilder.Create()
                         .AddString("expression", "The expression or statement to execute (e.g. 'myVar = 42', 'obj.Reset()')", required: true)
                         .AddInteger("timeout", "Evaluation timeout in milliseconds (default: 5000)")
@@ -39,11 +39,11 @@ namespace VsMcp.Extension.Tools
                 if (dte.Debugger.CurrentMode != dbgDebugMode.dbgBreakMode)
                     return McpToolResult.Error("Debugger must be in Break mode to execute expressions");
 
-                // Use frame search logic to find a suitable managed frame (allowSideEffects = true)
-                var result = DebugHelpers.TryEvaluateExpression(dte.Debugger, expression, true, timeout);
+                var evaluation = DebugHelpers.TryEvaluateExpressionDetailed(dte.Debugger, expression, true, timeout);
 
-                if (result != null)
+                if (evaluation.Succeeded)
                 {
+                    var result = evaluation.Expression;
                     return McpToolResult.Success(new
                     {
                         expression,
@@ -52,7 +52,8 @@ namespace VsMcp.Extension.Tools
                     });
                 }
 
-                return McpToolResult.Error("Expression evaluation failed: no suitable managed frame found");
+                return McpToolResult.Error(
+                    "Expression: " + expression + "\n" + evaluation.GetFailureSummary());
             });
         }
     }
