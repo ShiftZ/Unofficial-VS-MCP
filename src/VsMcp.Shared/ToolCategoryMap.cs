@@ -49,6 +49,9 @@ namespace VsMcp.Shared
             { "execute_command", ToolCategory.General },
             { "get_status", ToolCategory.General },
             { "get_help", ToolCategory.General },
+            { "vs_inproc_invoke", ToolCategory.General },
+            { "vs_inproc_handles", ToolCategory.General },
+            { "vs_inproc_release", ToolCategory.General },
             // Solution
             { "solution_open", ToolCategory.Solution },
             { "solution_close", ToolCategory.Solution },

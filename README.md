@@ -12,7 +12,7 @@ VS MCP Server exposes tools across the following categories:
 
 | Category | Description |
 |----------|-------------|
-| General | Execute VS commands, get IDE status, view tool help |
+| General | Execute VS commands, get IDE status, view tool help, and run advanced in-process diagnostics |
 | Solution & Project | Open/close solutions, list/inspect projects |
 | Build | Build solution/project, clean, rebuild, get build errors, switch configuration |
 | Editor | Open/close/read/write/edit files, find in files |
@@ -40,6 +40,9 @@ VS MCP Server exposes tools across the following categories:
 | `execute_command` | Execute a Visual Studio command by name |
 | `get_status` | Get the current Visual Studio status including solution state, active document, solution languages, and debugger mode |
 | `get_help` | Get available vs-mcp tools with descriptions. Accepts `categories`, an optional array of one or more category names, for example `["Build", "Debugger"]`. Omit it to list all tools. |
+| `vs_inproc_invoke` | Advanced diagnostic tool that resolves a VS in-process target (service, DTE, static type, or retained handle), reads or invokes a public member by reflection, and returns a JSON-safe summary |
+| `vs_inproc_handles` | List diagnostic object handles retained by `vs_inproc_invoke` for follow-up calls |
+| `vs_inproc_release` | Release one retained diagnostic object handle, or all retained handles |
 
 #### Solution
 
