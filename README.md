@@ -97,7 +97,7 @@ VS MCP Server exposes tools across the following categories:
 | Tool | Description |
 |------|-------------|
 | `code_goto_definition` | Navigate to the definition of a symbol at the specified position |
-| `code_find_references` | Find all references of a symbol at the specified position |
+| `code_find_references` | Run VS Find All References, wait for completion, and return structured reference rows when the provider exposes table data |
 | `code_goto_implementation` | Navigate to the implementation of an interface or abstract member |
 
 #### CppCode
