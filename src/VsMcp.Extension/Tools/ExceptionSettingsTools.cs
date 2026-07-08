@@ -27,9 +27,9 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "exception_settings_set",
-                    "Configure when to break on a specific exception type. Uses Debug.SetBreakOnException VS command.",
+                    "Configure when to break on a specific exception type or a group's '<All ... not in this list>' rule.",
                     SchemaBuilder.Create()
-                        .AddString("exceptionName", "Full exception type name (e.g. 'System.NullReferenceException')", required: true)
+                        .AddString("exceptionName", "Full exception type name or catch-all label (e.g. '<All C++ Exceptions not in this list>')", required: true)
                         .AddBoolean("breakWhenThrown", "Break when the exception is thrown (first-chance)", required: true)
                         .Build()),
                 args => ExceptionSettingsSetAsync(accessor, args));
@@ -71,9 +71,12 @@ namespace VsMcp.Extension.Tools
                             {
                                 try
                                 {
+                                    var isCatchAll = IsCatchAll(es, ex);
                                     exceptions.Add(new
                                     {
-                                        name = ex.Name,
+                                        name = isCatchAll ? GetCatchAllName(es.Name) : ex.Name,
+                                        rawName = ex.Name,
+                                        isCatchAll,
                                         breakWhenThrown = ex.BreakWhenThrown
                                     });
                                 }
@@ -130,14 +133,19 @@ namespace VsMcp.Extension.Tools
                         {
                             try
                             {
-                                if (string.Equals(ex.Name, exceptionName, StringComparison.OrdinalIgnoreCase))
+                                var isRawName = string.Equals(ex.Name, exceptionName, StringComparison.OrdinalIgnoreCase);
+                                var isCatchAllName = IsCatchAll(es, ex) &&
+                                    string.Equals(GetCatchAllName(es.Name), exceptionName, StringComparison.OrdinalIgnoreCase);
+                                if (isRawName || isCatchAllName)
                                 {
                                     es.SetBreakWhenThrown(breakWhenThrown.Value, ex);
 
                                     return McpToolResult.Success(new
                                     {
                                         message = $"Exception '{exceptionName}': breakWhenThrown = {breakWhenThrown.Value}",
-                                        exceptionName,
+                                        exceptionName = isCatchAllName ? GetCatchAllName(es.Name) : ex.Name,
+                                        rawName = ex.Name,
+                                        isCatchAll = IsCatchAll(es, ex),
                                         group = es.Name,
                                         breakWhenThrown = breakWhenThrown.Value
                                     });
@@ -174,6 +182,16 @@ namespace VsMcp.Extension.Tools
 
                 return McpToolResult.Error($"Could not find or configure exception '{exceptionName}'");
             });
+        }
+
+        private static bool IsCatchAll(ExceptionSettings settings, ExceptionSetting setting)
+        {
+            return string.Equals(settings.Name, setting.Name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetCatchAllName(string groupName)
+        {
+            return $"<All {groupName} not in this list>";
         }
     }
 }
