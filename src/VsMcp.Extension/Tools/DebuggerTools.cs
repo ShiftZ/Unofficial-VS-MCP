@@ -50,6 +50,16 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "debug_continue_wait_break",
+                    "Continue execution from a debugger break, then wait until the debugger breaks/stops again or time_out expires. Equivalent to debug_continue followed by debug_wait_break.",
+                    SchemaBuilder.Create()
+                        .AddInteger("time_out", "Timeout in milliseconds", required: true)
+                        .Build()),
+                args => DebugContinueWaitBreakAsync(accessor, args),
+                GetDebugWaitBreakTimeout);
+
+            registry.Register(
+                new McpToolDefinition(
                     "debug_start_without_debugging",
                     "Ctrl+F5: run the startup project WITHOUT the debugger attached (breakpoints are ignored, exceptions do not break into VS). Use this when the user wants to just run the app. For debugging (F5) with breakpoints, use debug_start.",
                     SchemaBuilder.Empty()),
@@ -194,6 +204,56 @@ namespace VsMcp.Extension.Tools
                 return await CreateDebuggerSignalResultAsync(accessor, startResult.Signal, startResult.ElapsedMs);
 
             return await DebugWaitBreakAsync(accessor, args);
+        }
+
+        private static async Task<McpToolResult> DebugContinueWaitBreakAsync(VsServiceAccessor accessor, JObject args)
+        {
+            var timeoutMs = args.Value<int?>("time_out");
+            if (!timeoutMs.HasValue || timeoutMs.Value <= 0)
+                return McpToolResult.Error("Parameter 'time_out' is required and must be positive");
+
+            var stopwatch = Stopwatch.StartNew();
+            DebuggerWaitRegistration registration = null;
+
+            try
+            {
+                registration = await accessor.RunOnUIThreadAsync(() =>
+                {
+                    var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                        .Run(() => accessor.GetDteAsync());
+
+                    if (dte.Debugger.CurrentMode != dbgDebugMode.dbgBreakMode)
+                        return null;
+
+                    var waitRegistration = new DebuggerWaitRegistration(dte.Events.DebuggerEvents);
+                    waitRegistration.Subscribe();
+                    dte.Debugger.Go(false);
+                    return waitRegistration;
+                });
+
+                if (registration == null)
+                    return McpToolResult.Error("Debugger must be in Break mode to continue");
+
+                var delayTask = Task.Delay(timeoutMs.Value);
+                var completed = await Task.WhenAny(registration.WaitTask, delayTask).ConfigureAwait(false);
+                var signal = completed == registration.WaitTask || registration.WaitTask.IsCompleted
+                    ? await registration.WaitTask.ConfigureAwait(false)
+                    : new DebuggerSignal("timeout", null, null);
+
+                stopwatch.Stop();
+                return await CreateDebuggerSignalResultAsync(accessor, signal, stopwatch.ElapsedMilliseconds, includeBreakContext: true);
+            }
+            finally
+            {
+                if (registration != null)
+                {
+                    try
+                    {
+                        await accessor.RunOnUIThreadAsync(() => registration.Unsubscribe());
+                    }
+                    catch { }
+                }
+            }
         }
 
         private static async Task<DebuggerWaitResult> DebugStartAndWaitRunAsync(VsServiceAccessor accessor)

@@ -177,11 +177,23 @@ namespace VsMcp.StdioProxy
                     case McpConstants.MethodToolsList:
                         if (_baseUrl != null)
                         {
-                            response = await TryRelayAsync(line, id, ct);
-                            // Apply tool filter to relayed response
-                            if (response != null && _toolFilter != null)
+                            try
                             {
-                                response = FilterRelayedToolsList(response);
+                                response = await TryRelayAsync(line, id, ct);
+                                // Apply tool filter to relayed response
+                                if (response != null && _toolFilter != null)
+                                {
+                                    response = FilterRelayedToolsList(response);
+                                }
+                            }
+                            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                var message = await HandleRelayFailureAsync(ex, method, id);
+                                response = BuildJsonRpcError(id, McpConstants.InternalError, message);
                             }
                         }
                         if (response == null)
@@ -201,7 +213,19 @@ namespace VsMcp.StdioProxy
                         }
                         if (_baseUrl != null)
                         {
-                            response = await TryRelayAsync(line, id, ct);
+                            try
+                            {
+                                response = await TryRelayAsync(line, id, ct);
+                            }
+                            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                var message = await HandleRelayFailureAsync(ex, method, id);
+                                response = BuildToolsCallRelayError(id, toolName, message);
+                            }
                         }
                         if (response == null)
                         {
@@ -222,7 +246,19 @@ namespace VsMcp.StdioProxy
 
                         if (_baseUrl != null)
                         {
-                            response = await TryRelayAsync(line, id, ct);
+                            try
+                            {
+                                response = await TryRelayAsync(line, id, ct);
+                            }
+                            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                            {
+                                throw;
+                            }
+                            catch (Exception ex)
+                            {
+                                var message = await HandleRelayFailureAsync(ex, method, id);
+                                response = BuildJsonRpcError(id, McpConstants.InternalError, message);
+                            }
                         }
                         if (response == null)
                         {
@@ -256,71 +292,44 @@ namespace VsMcp.StdioProxy
 
         private static async Task<string> TryRelayAsync(string requestJson, JToken id, CancellationToken ct)
         {
-            try
+            var mcpUrl = $"{_baseUrl}/mcp";
+            var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
+            Log($"[HTTP] PostAsync id={id} to {mcpUrl}...");
+            var response = await HttpClient.PostAsync(mcpUrl, content, ct);
+            Log($"[HTTP] PostAsync id={id} status={response.StatusCode}");
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
+                return null; // notification - no response
+
+            Log($"[HTTP] ReadAsStringAsync id={id}...");
+            var body = await response.Content.ReadAsStringAsync();
+            Log($"[HTTP] ReadAsStringAsync id={id} done, {body?.Length ?? 0} bytes");
+            return string.IsNullOrEmpty(body) ? null : body;
+        }
+
+        private static async Task<string> HandleRelayFailureAsync(Exception ex, string method, JToken id)
+        {
+            var mcpUrl = _baseUrl == null ? "(no endpoint)" : $"{_baseUrl}/mcp";
+            Log($"[HTTP] Relay failure method={method} id={id} endpoint={mcpUrl}: {ex}");
+            await Console.Error.WriteLineAsync($"[VsMcp.StdioProxy] Relay failure for {method} at {mcpUrl}: {ex}");
+
+            if (ex is HttpRequestException)
             {
-                var mcpUrl = $"{_baseUrl}/mcp";
-                var content = new StringContent(requestJson, Encoding.UTF8, "application/json");
-                Log($"[HTTP] PostAsync id={id} to {mcpUrl}...");
-                var response = await HttpClient.PostAsync(mcpUrl, content, ct);
-                Log($"[HTTP] PostAsync id={id} status={response.StatusCode}");
-
-                if (response.StatusCode == System.Net.HttpStatusCode.NoContent)
-                    return null; // notification - no response
-
-                Log($"[HTTP] ReadAsStringAsync id={id}...");
-                var body = await response.Content.ReadAsStringAsync();
-                Log($"[HTTP] ReadAsStringAsync id={id} done, {body?.Length ?? 0} bytes");
-                return string.IsNullOrEmpty(body) ? null : body;
-            }
-            catch (HttpRequestException ex)
-            {
-                await Console.Error.WriteLineAsync($"[VsMcp.StdioProxy] HTTP error: {ex.Message}");
-
-                // Connection lost - try to find a new port
                 var newPort = PortDiscovery.FindPort(_pid, _sln);
                 if (newPort.HasValue)
                 {
                     _baseUrl = $"http://localhost:{newPort.Value}";
-                    await Console.Error.WriteLineAsync($"[VsMcp.StdioProxy] Reconnected to port {newPort.Value}");
+                    Log($"[HTTP] Rediscovered VS MCP endpoint at {_baseUrl} after relay failure.");
                 }
                 else
                 {
                     _baseUrl = null;
-                    await Console.Error.WriteLineAsync("[VsMcp.StdioProxy] VS connection lost. Switching to offline mode.");
                 }
+            }
 
-                return null;
-            }
-            catch (TaskCanceledException) when (ct.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch (TaskCanceledException)
-            {
-                await Console.Error.WriteLineAsync("[VsMcp.StdioProxy] Request canceled");
-                if (id != null)
-                {
-                    var timeoutResult = new JObject
-                    {
-                        ["content"] = new JArray
-                        {
-                            new JObject
-                            {
-                                ["type"] = "text",
-                                ["text"] = "Tool execution was canceled."
-                            }
-                        },
-                        ["isError"] = true
-                    };
-                    return BuildJsonRpcResult(id, timeoutResult);
-                }
-                return null;
-            }
-            catch (Exception ex)
-            {
-                await Console.Error.WriteLineAsync($"[VsMcp.StdioProxy] Error: {ex.Message}");
-                return null;
-            }
+            return $"Could not contact the Visual Studio extension at {mcpUrl}. "
+                + $"The request failed before an HTTP response was received: {ex.GetType().Name}: {ex.Message}. "
+                + "This is a transport failure, not a solution-selection error.";
         }
 
         private static string BuildInitializeResponse(JToken id)
@@ -531,6 +540,25 @@ namespace VsMcp.StdioProxy
                     {
                         ["type"] = "text",
                         ["text"] = message
+                    }
+                },
+                ["isError"] = true
+            };
+
+            return BuildJsonRpcResult(id, errorResult);
+        }
+
+        private static string BuildToolsCallRelayError(JToken id, string toolName, string message)
+        {
+            var errorResult = new JObject
+            {
+                ["content"] = new JArray
+                {
+                    new JObject
+                    {
+                        ["type"] = "text",
+                        ["text"] = $"Could not relay tool '{toolName}'. {message} "
+                            + "The operation may or may not have executed; do not automatically retry a mutating tool."
                     }
                 },
                 ["isError"] = true

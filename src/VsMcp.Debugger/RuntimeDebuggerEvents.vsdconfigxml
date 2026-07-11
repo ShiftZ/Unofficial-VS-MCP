@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration xmlns="http://schemas.microsoft.com/vstudio/vsdconfig/2008">
+  <ManagedComponent
+    ComponentId="79798455-8158-4fb1-b47e-10689fdc99c5"
+    ComponentLevel="63000"
+    AssemblyName="VsMcp.Debugger">
+    <Class Name="VsMcp.Debugger.RuntimeDebuggerEventListener">
+      <Implements>
+        <InterfaceGroup>
+          <NoFilter />
+          <Interface Name="IDkmRuntimeBreakpointConditionFailedReceived" />
+          <Interface Name="IDkmRuntimeBreakpointHitWithErrorReceived" />
+          <Interface Name="IDkmBreakpointHitWithErrorReceived" />
+        </InterfaceGroup>
+      </Implements>
+    </Class>
+  </ManagedComponent>
+</Configuration>

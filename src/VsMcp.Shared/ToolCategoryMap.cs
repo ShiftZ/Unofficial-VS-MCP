@@ -79,6 +79,7 @@ namespace VsMcp.Shared
             { "debug_start", ToolCategory.Debugger },
             { "debug_wait_break", ToolCategory.Debugger },
             { "debug_start_wait_break", ToolCategory.Debugger },
+            { "debug_continue_wait_break", ToolCategory.Debugger },
             { "debug_start_without_debugging", ToolCategory.Debugger },
             { "debug_stop", ToolCategory.Debugger },
             { "debug_restart", ToolCategory.Debugger },

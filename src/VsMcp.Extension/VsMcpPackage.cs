@@ -39,10 +39,8 @@ namespace VsMcp.Extension
 
         public VsMcpPackage()
         {
-            // Redirect VS assembly loads to already-loaded versions.
-            // Fixes VS2019 where our compile-time Threading 16.10.0.0 reference
-            // may not match the VS runtime version, causing FileNotFoundException
-            // or MissingMethodException.
+            // Redirect VS SDK assembly loads to the versions supplied by the
+            // running Visual Studio instance.
             AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
         }
 

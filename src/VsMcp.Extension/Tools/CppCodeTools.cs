@@ -19,7 +19,7 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "cpp_find_symbol",
-                    "Find C++ source declarations matching a symbol name using VCCodeModel and return structured locations without changing the active IDE document or selection.",
+                    "Find C++ source declarations matching a symbol name and return structured locations. A fully qualified name is preferred.",
                     SchemaBuilder.Create()
                         .AddString("symbolName", "C++ symbol name or fully qualified name to find", required: true)
                         .AddString("projectName", "Optional C++ project name to limit the search")

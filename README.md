@@ -129,6 +129,7 @@ VS MCP Server exposes tools across the following categories:
 |------|-------------|
 | `debug_start` | Start debugging the startup project (equivalent to F5) |
 | `debug_start_wait_break` | Start debugging and wait until the debugger breaks, stops, or times out |
+| `debug_continue_wait_break` | Continue debugging and wait until the debugger breaks, stops, or times out |
 | `debug_start_without_debugging` | Start the startup project without the debugger attached (equivalent to Ctrl+F5) |
 | `debug_stop` | Stop debugging the current session |
 | `debug_restart` | Restart debugging the current session |
