@@ -19,11 +19,11 @@ namespace VsMcp.Extension.Tools
             registry.Register(
                 new McpToolDefinition(
                     "breakpoint_set",
-                    "Set a breakpoint. Use file+line for location breakpoints, or functionName for function breakpoints. Optionally add condition or hitCount. Conditions must be simple, side-effect-free Boolean expressions over in-scope values (for example, 'count == 10'); do not invoke methods or functions. For more information see https://learn.microsoft.com/en-us/visualstudio/debugger/expressions-in-the-debugger?view=visualstudio. List of supported intrinsics: https://learn.microsoft.com/en-us/visualstudio/debugger/expressions-in-the-debugger?view=visualstudio#BKMK_Using_debugger_intrinisic_functions_to_maintain_state",
+                    "Set a breakpoint. Use file+line for location breakpoints, or functionName for function breakpoints. When possible, provide the function name with its signature (for example, 'Foo::Init(const String&)'). Optionally add condition or hitCount. Conditions must be simple, side-effect-free Boolean expressions over in-scope values (for example, 'count == 10'); do not invoke methods or functions. More about condition expressions: https://learn.microsoft.com/en-us/visualstudio/debugger/expressions-in-the-debugger?view=visualstudio. List of supported intrinsics: https://learn.microsoft.com/en-us/visualstudio/debugger/expressions-in-the-debugger?view=visualstudio#BKMK_Using_debugger_intrinisic_functions_to_maintain_state. Note: setting a breakpoint at design time makes sense only inside the body of a non-lambda function. There is a high chance that the breakpoint will fail to bind at runtime. Lambda functions tend to fail binding even when the location is inside their body. A more reliable workflow is to start the session with debug_start_in_break, set the desired breakpoints, and then call debug_continue_wait_break.",
                     SchemaBuilder.Create()
                         .AddString("file", "Full path to the source file (required for location breakpoints)")
                         .AddInteger("line", "Line number to set the breakpoint (required for location breakpoints)")
-                        .AddString("functionName", "Fully qualified function name for function breakpoints (e.g. 'MyNamespace.MyClass.MyMethod')")
+                        .AddString("functionName", "Fully qualified function name for function breakpoints. When possible, include its signature (e.g. 'Foo::Init(const String&)')")
                         .AddString("condition", "Optional simple, side-effect-free Boolean condition over in-scope values; do not invoke methods or functions")
                         .AddInteger("hitCount", "Optional hit count target value")
                         .AddEnum("hitCountType", "When to break relative to the hit count",
@@ -301,10 +301,10 @@ namespace VsMcp.Extension.Tools
         {
             var debuggerMode = dte.Debugger.CurrentMode;
             var validationError = ValidateCreatedBreakpoints(created, expectedCondition,
-                requireRuntimeBounds: debuggerMode == dbgDebugMode.dbgRunMode);
+                requireRuntimeBounds: debuggerMode != dbgDebugMode.dbgDesignMode);
             if (validationError == null) return null;
 
-            if (debuggerMode != dbgDebugMode.dbgRunMode)
+            if (debuggerMode == dbgDebugMode.dbgDesignMode)
                 return validationError;
 
             var cleanupError = TryDeleteTaggedBreakpoint(dte, breakpointId);

@@ -77,6 +77,7 @@ namespace VsMcp.Shared
             { "find_in_files", ToolCategory.Editor },
             // Debugger
             { "debug_start", ToolCategory.Debugger },
+            { "debug_start_in_break", ToolCategory.Debugger },
             { "debug_wait_break", ToolCategory.Debugger },
             { "debug_start_wait_break", ToolCategory.Debugger },
             { "debug_continue_wait_break", ToolCategory.Debugger },

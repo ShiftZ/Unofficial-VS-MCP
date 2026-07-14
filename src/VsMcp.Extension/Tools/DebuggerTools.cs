@@ -30,6 +30,13 @@ namespace VsMcp.Extension.Tools
 
             registry.Register(
                 new McpToolDefinition(
+                    "debug_start_in_break",
+                    "Start debugging from Design mode and step into the first executable statement. Returns an error if Visual Studio is already in Running or Break mode.",
+                    SchemaBuilder.Empty()),
+                args => DebugStartInBreakAsync(accessor));
+
+            registry.Register(
+                new McpToolDefinition(
                     "debug_wait_break",
                     "Wait until the debugger stops or the timeout expires. This is event-driven: it listens for VS debugger break/design-mode events, does not continue execution, and returns the stop reason plus current break context when available. The time_out parameter is in milliseconds.",
                     SchemaBuilder.Create()
@@ -173,6 +180,23 @@ namespace VsMcp.Extension.Tools
         {
             var waitModeChange = args.Value<bool?>("wait_mode_change") == true;
             return DebugStartAsync(accessor, waitModeChange);
+        }
+
+        private static async Task<McpToolResult> DebugStartInBreakAsync(VsServiceAccessor accessor)
+        {
+            return await accessor.RunOnUIThreadAsync(() =>
+            {
+                var dte = Microsoft.VisualStudio.Shell.ThreadHelper.JoinableTaskFactory
+                    .Run(() => accessor.GetDteAsync());
+
+                var currentMode = dte.Debugger.CurrentMode;
+                if (currentMode != dbgDebugMode.dbgDesignMode)
+                    return McpToolResult.Error(
+                        $"Visual Studio is already in {GetDebuggerModeName(currentMode)} mode");
+
+                dte.Debugger.StepInto(false);
+                return McpToolResult.Success("Debugging started in Break mode");
+            });
         }
 
         private static async Task<McpToolResult> DebugStartAsync(VsServiceAccessor accessor, bool waitModeChange)
