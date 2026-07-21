@@ -40,6 +40,12 @@ namespace VsMcp.Extension.Services
             return await _package.GetServiceAsync(serviceType);
         }
 
+        public async Task<IVsDebugger> GetVsDebuggerAsync()
+        {
+            await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+            return Package.GetGlobalService(typeof(SVsShellDebugger)) as IVsDebugger;
+        }
+
         /// <summary>
         /// Executes an action on the UI thread and returns the result.
         /// All EnvDTE calls must go through this method.
